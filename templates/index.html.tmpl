@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Timo Hoyland – Engineer, business owner, and coach. Supporting teams and improving IT services across agency, enterprise, and client-facing environments.">
+    <meta name="keywords" content="Timo Hoyland, engineer, IT services, DevOps, team building, reliability, NottInfra">
+    <meta name="author" content="Timo Hoyland">
+    <meta name="robots" content="index, follow">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ .BaseURL }}/">
+    <meta property="og:title" content="Timo Hoyland | Engineer | Business Owner | Coach">
+    <meta property="og:description" content="Supporting teams and improving IT services across agency, enterprise, client-facing environments. Focus on team-building, reliability, cost measures.">
+    <meta property="og:locale" content="en_GB">
+    <meta property="og:site_name" content="Timo Hoyland">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Timo Hoyland | Engineer | Business Owner | Coach">
+    <meta name="twitter:description" content="Supporting teams and improving IT services across agency, enterprise, client-facing environments.">
+
+    <title>Timo Hoyland | Engineer | Business Owner | Coach</title>
+    <link rel="canonical" href="{{ .BaseURL }}/">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 1.5rem;
+        }
+
+        header,
+        main {
+            max-width: 31.25rem;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        h1,
+        h2,
+        a,
+        p {
+            font-size: 0.78125rem;
+            line-height: 1.5625rem;
+            font-family: sans-serif;
+        }
+
+        h1 {
+            margin: 1rem 0 1.5rem;
+        }
+
+        nav {
+            display: flex;
+            column-gap: 0.75rem;
+        }
+
+        hr {
+            margin: 2rem 0;
+        }
+
+        article > p {
+            margin: 1rem 0 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header role="banner">
+        <p>Supporting teams and improving IT services across agency, enterprise, client-facing environments. Focus on team-building, reliability, cost measures.</p>
+        <h1>Timo Hoyland</h1>
+        <nav aria-label="Main navigation">
+            <a href="https://linkedin.com/in/timo-hoyland" rel="noopener noreferrer" target="_blank">LinkedIn</a>
+            <a href="https://github.com/1imo" rel="noopener noreferrer" target="_blank">GitHub</a>
+            <a href="https://nottinfra.co.uk" rel="noopener noreferrer" target="_blank">NottInfra</a>
+        </nav>
+    </header>
+    <main role="main" id="main-content">
+        {{ range .Articles }}
+        <article aria-labelledby="article-{{ .Slug }}-title">
+            <hr aria-hidden="true">
+            <h2 id="article-{{ .Slug }}-title">{{ .Title }}</h2>
+            <p>{{ .Description }}</p>
+            <a href="/article/{{ .Slug }}" aria-label="Read more: {{ .Title }}">Read more</a>
+        </article>
+        {{ end }}
+    </main>
+</body>
+</html>
