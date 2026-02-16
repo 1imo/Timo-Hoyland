@@ -2,7 +2,7 @@
 title: Intro
 slug: intro
 description: T. Hoyland – Solutions Consultant. Supporting teams and improving IT services across agency, enterprise, and client-facing environments. Based in Nottingham.
-keywords: Timo Hoyland, T Hoyland, Timothy Hoyland, Nottingham, NottInfra, Notts, Solutions Consultant, infrastructure, reliability, team building, IT services, engineering leadership, platform engineering, DevOps, cost control, operational risk
+keywords: Timo Hoyland, T Hoyland, Timothy Hoyland, Timo Hoyland Nottingham, Nottingham, NottInfra, Notts, Solutions Consultant, infrastructure, reliability, team building, IT services, engineering leadership, platform engineering, DevOps, cost control, operational risk
 created: 2026-02-16
 updated: 2026-02-16
 ---
