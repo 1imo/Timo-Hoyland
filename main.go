@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/yuin/goldmark"
 )
@@ -16,11 +18,17 @@ import (
 const baseURL = "https://timohoyland.co.uk"
 
 type Article struct {
-	Title       string
-	Slug        string
-	Description string
-	Keywords    string
-	Body        string
+	Title          string
+	Slug           string
+	Description    string
+	Keywords       string
+	Body           string
+	Created        string
+	Updated        string
+	DisplayUpdated string
+
+	createdTime time.Time
+	updatedTime time.Time
 }
 
 type IndexData struct {
@@ -127,6 +135,10 @@ func loadArticles(dir string) ([]Article, error) {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("stat %s: %w", path, err)
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -135,8 +147,24 @@ func loadArticles(dir string) ([]Article, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
+		if a.Created == "" {
+			a.Created = info.ModTime().Format("2006-01-02")
+		}
+		if a.Updated == "" {
+			a.Updated = info.ModTime().Format("2006-01-02")
+		}
+		if t, err := time.Parse("2006-01-02", a.Created); err == nil {
+			a.createdTime = t
+		}
+		if t, err := time.Parse("2006-01-02", a.Updated); err == nil {
+			a.updatedTime = t
+			a.DisplayUpdated = formatHumanDate(t)
+		}
 		articles = append(articles, a)
 	}
+	sort.Slice(articles, func(i, j int) bool {
+		return articles[i].updatedTime.After(articles[j].updatedTime)
+	})
 	return articles, nil
 }
 
@@ -170,6 +198,10 @@ func parseArticle(data []byte) (Article, error) {
 				a.Description = val
 			case "keywords":
 				a.Keywords = val
+			case "created":
+				a.Created = val
+			case "updated":
+				a.Updated = val
 			}
 		}
 	}
@@ -181,4 +213,20 @@ func parseArticle(data []byte) (Article, error) {
 	a.Body = buf.String()
 
 	return a, nil
+}
+
+func formatHumanDate(t time.Time) string {
+	day := t.Day()
+	var suffix string
+	switch day {
+	case 1, 21, 31:
+		suffix = "st"
+	case 2, 22:
+		suffix = "nd"
+	case 3, 23:
+		suffix = "rd"
+	default:
+		suffix = "th"
+	}
+	return fmt.Sprintf("%d%s %s %d", day, suffix, t.Format("Jan"), t.Year())
 }

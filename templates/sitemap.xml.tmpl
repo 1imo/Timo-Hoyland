@@ -8,6 +8,7 @@
   {{ range .Articles }}
   <url>
     <loc>{{ $.BaseURL }}/article/{{ .Slug }}</loc>
+    <lastmod>{{ .Updated }}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

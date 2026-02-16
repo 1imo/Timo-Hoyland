@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-TL1T4C3DJ3"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-TL1T4C3DJ3');
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ .Description }}">
@@ -16,6 +25,8 @@
     <meta property="og:locale" content="en_GB">
     <meta property="og:site_name" content="Timo Hoyland">
     <meta property="article:author" content="Timo Hoyland">
+    <meta property="article:published_time" content="{{ .Created }}">
+    <meta property="article:modified_time" content="{{ .Updated }}">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary">
@@ -59,7 +70,7 @@
         }
 
         h2 {
-            margin: 1.5rem 0 1rem;
+            margin: 1.5rem 0 0rem;
         }
 
         h3 {
@@ -86,6 +97,11 @@
         [itemprop="articleBody"] ol {
             padding-left: 1.5rem;
         }
+
+        .article-date {
+            margin-top: 0.25rem;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -102,6 +118,14 @@
         <article aria-labelledby="article-title" itemscope itemtype="https://schema.org/Article">
             <hr aria-hidden="true">
             <h2 id="article-title" itemprop="headline">{{ .Title }}</h2>
+
+            <p class="article-date">
+                <time datetime="{{ .Updated }}" itemprop="dateModified">{{ if .DisplayUpdated }}{{ .DisplayUpdated }}{{ else }}{{ .Updated }}{{ end }}</time>
+            </p>
+
+            <meta itemprop="datePublished" content="{{ .Created }}">
+            <meta itemprop="dateModified" content="{{ .Updated }}">
+
             <div itemprop="articleBody">
                 {{ .Body }}
             </div>
