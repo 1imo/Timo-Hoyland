@@ -1,7 +1,7 @@
 ---
 title: Intro
 slug: intro
-description: Timo Hoyland – Solutions Consultant, Business Owner, Coach. Supporting teams and improving IT services across agency, enterprise, and client-facing environments. Based in Nottingham.
+description: T. Hoyland – Solutions Consultant. Supporting teams and improving IT services across agency, enterprise, and client-facing environments. Based in Nottingham.
 keywords: Timo Hoyland, T. Hoyland, Timothy Hoyland, Timo Hoyland Nottingham, Nottingham, NottInfra, Solutions Consultant, infrastructure, reliability, team building, IT services, engineering leadership, platform engineering, DevOps, cost control, operational risk
 created: 2026-02-16
 updated: 2026-02-16
@@ -11,7 +11,7 @@ Theme: Architecture / Reliability / Cost / Governance / Engineering / Career
 
 I maintain this space to articulate how I reason about infrastructure, engineering, and professional challenges. My objective is to make visible the judgment process I use when balancing operational trade-offs, constraints, and technical risk.
 
-Over the years, I have worked across agency, enterprise, and client-facing environments. Each context presents recurring patterns—whether in system design, cost governance, reliability expectations, or team operations—that require structured reasoning rather than reactive decision-making.
+Over the years, I have worked across agency, enterprise, and client-facing environments. Each context presents recurring patterns—whether in system design, cost governance, reliability expectations, or team operations - that require structured reasoning rather than reactive decision-making.
 
 I approach each challenge by decomposing the operational and architectural tensions. For example, when faced with hybrid infrastructure adoption, I consider performance, reliability, cost, and governance in parallel rather than sequentially. I weigh decisions under constraint: time, tooling maturity, team capacity, and security posture. The outcome is a disciplined articulation of trade-offs, highlighting the path chosen and the risks mitigated.
 
