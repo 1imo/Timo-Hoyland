@@ -1,14 +1,26 @@
 ---
 title: Intro
 slug: intro
-description: T. Hoyland – Solutions Consultant. Supporting teams and improving IT services across agency, enterprise, and client-facing environments. Based in Nottingham.
-keywords: Timo Hoyland, T Hoyland, Timothy Hoyland, Timo Hoyland Nottingham, Nottingham, NottInfra, Notts, Solutions Consultant, infrastructure, reliability, team building, IT services, engineering leadership, platform engineering, DevOps, cost control, operational risk
+description: Timo Hoyland – Solutions Consultant, Business Owner, Coach. Supporting teams and improving IT services across agency, enterprise, and client-facing environments. Based in Nottingham.
+keywords: Timo Hoyland, T. Hoyland, Timothy Hoyland, Timo Hoyland Nottingham, Nottingham, NottInfra, Solutions Consultant, infrastructure, reliability, team building, IT services, engineering leadership, platform engineering, DevOps, cost control, operational risk
 created: 2026-02-16
 updated: 2026-02-16
 ---
 
-I'm T. Hoyland. Nottingham. Solutions Consultant—teams, reliability, cost. I run [NottInfra](https://nottinfra.co.uk), an infrastructure consultancy.
+Theme: Architecture / Reliability / Cost / Governance / Engineering / Career 
 
-The work that sticks isn't the tech. It's the teams and the conditions that let them deliver. I've worked across agency, enterprise, and client-facing IT—digital signage, pipelines, logging, Windows Server, M365, FMECAs for exec and finance. The pattern that shows up: the stack is often fine. The structure around it—backlog discipline, alerting, who owns what, how decisions get made—is where things go wrong. That gap costs people sleep and money.
+I maintain this space to articulate how I reason about infrastructure, engineering, and professional challenges. My objective is to make visible the judgment process I use when balancing operational trade-offs, constraints, and technical risk.
 
-Supporting teams means creating space for good decisions. Reducing unnecessary risk, keeping costs predictable, building systems that don't surprise people at 3am. Technical depth matters, but it only lands when the conditions are right. I write about that here.
+Over the years, I have worked across agency, enterprise, and client-facing environments. Each context presents recurring patterns—whether in system design, cost governance, reliability expectations, or team operations—that require structured reasoning rather than reactive decision-making.
+
+I approach each challenge by decomposing the operational and architectural tensions. For example, when faced with hybrid infrastructure adoption, I consider performance, reliability, cost, and governance in parallel rather than sequentially. I weigh decisions under constraint: time, tooling maturity, team capacity, and security posture. The outcome is a disciplined articulation of trade-offs, highlighting the path chosen and the risks mitigated.
+
+Decision-making rarely occurs in a vacuum. I operate with incomplete information, legacy tooling, and competing stakeholder priorities. Recognizing these limitations is central to forming reasoned, defensible conclusions rather than idealized ones.
+
+For each problem, I document both the solution implemented and the rationale behind it. This may include tooling adjustments, operational policy updates, or architectural adaptations. I aim to make the reasoning replicable, highlighting principles rather than merely recording outcomes.
+
+The durable lesson is that clarity in reasoning—structured, reflective, and context-aware—enhances technical and operational judgment. By articulating trade-offs explicitly, I preserve lessons learned and make them transferable to new environments and future decisions.
+
+This site is a reflection of disciplined thinking in practice. It is not consultancy positioning, news commentary, or personal journaling. My focus is on demonstrating how I reason, how I navigate constraint, and how I extract durable insights from hands-on experience.
+
+---
