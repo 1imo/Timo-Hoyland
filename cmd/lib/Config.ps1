@@ -24,14 +24,18 @@ class Config {
     [object] Get([string]$Path) {
         if ([string]::IsNullOrWhiteSpace($Path)) { return $this.ToObject($this.Tree) }
         $node = $this.Tree
+        $found = $true
         foreach ($part in $Path.Split('.')) {
-            if ($null -eq $node) { return $null }
+            if ($null -eq $node) { $found = $false; break }
             if ($node -is [System.Collections.IDictionary] -and $node.Contains($part)) {
                 $node = $node[$part]
             }
-            else { return $null }
+            else { $found = $false; break }
         }
-        return $this.ToObject($node)
+        if ($found) { return $this.ToObject($node) }
+        # settings.cfg list entries (KEY=value) live in flattened Data
+        if ($this.Data.ContainsKey($Path)) { return $this.Data[$Path] }
+        return $null
     }
 
     [string] Require([string]$Path) {
