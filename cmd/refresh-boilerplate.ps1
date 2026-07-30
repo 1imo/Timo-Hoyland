@@ -70,13 +70,7 @@ $Root = (git rev-parse --show-toplevel 2>$null)
 if (-not $Root) { $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
 Set-Location $Root
 
-$project = [Config]::new('project.cfg')
-$configsRoot = $project.Require('remotes.configs.root').TrimEnd('/')
-$repos = @($project.Get('remotes.configs.repos'))
-if ($repos -notcontains 'boilerplate') {
-    throw '[!] remotes.configs.repos must include boilerplate'
-}
-$git = "$configsRoot/boilerplate.git"
+$git = [Config]::new('project.cfg').Require('remotes.boilerplate.url')
 $stage = Join-Path ([IO.Path]::GetTempPath()) "boilerplate.$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 try {
@@ -103,6 +97,12 @@ try {
 finally {
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 }
+
+# SIG # Begin signature block
+# MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
+# BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAVKlr767uretdq
+# qDLlW2z9KK1/nCwXr8874YS2QmUfsaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
@@ -142,5 +142,40 @@ finally {
 # TV7NIp8psO5+gaurP8Z3xOsRX5fbmX0xTGsx8ONvO7PW/rk1j+WK0v15FdTVE6X0
 # d18e6jx+MRmQjxY5VLGsu+cT9/lAM1KT8rrYAUFC/myY5q7b3drKuYGE+QK2pX7U
 # zWI1T2Byq5oqkv16auGXklzotrYB0wAWXEesM6ErMCkGDCsGAQQBgoxMCgABAzEZ
+# BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
+# SIG # End signature block
+# R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
+# ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
+# VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
+# BQADggIPADCCAgoCggIBAKRICuzioM/pLsdWW/uV0Hl7Y5FHNBPTEl3X/oGK+BAi
+# kC0es0CLXLykWpsJ/f9ldyyHlMzwUR1zEIhCZXEyo+uqQ8B1yWke7rQ4wkWE6/DU
+# htCLSiySkf/KB389/ptcEM+jJ48DQGi0+8K6QQ02vEOAQKLfxA4Rrnl5BYY+nnNs
+# Rpa+B6K40i/aFAsc60gbG3SGQePzuHHbPl6CE5AzQNY2WBpY77aonZ830RM5AsS4
+# Xe7P8cDJ7Gahw6ZjLEriCaR3xBytPy63RiZdW8upuQ0AIFz4/8GVRYuOJ1wGeU53
+# b0OZhj/6Z481Zry0VcBvGfHidIVkQKbWZQ2QWdkSBbSAIR92tKpSqSDy4VQYQ4RO
+# l3NY/QHkJsAl6EGzQ514P+qUzkSyxgSNHZFCknqTu6gXtemaCUC7z/eLZDibw+mg
+# yAuyLTZoeAlDPaHT4FOPfB8pn6UuGb/LwJwFlBHGAkaYlfAkx3BJYIsQpfPwKxfN
+# Ufds8LMYArJlFZJnJ1EmJSE+qIu0cN7SyuFDAdGszrVjltYswzAfhE0NRQQm4HiG
+# CWG9ZxDD1TxbhvEecgJCOMy/dZCcjEEzq4wZxSVPicn0QowKDWHy1GpgdR3pT+Ok
+# zuIBpfEeXW5uW9e0yoOzwOnh1XCRp8hv+B4l4RvTEl3ccZ+PcmAcsLHODqvW4vmT
+# AgMBAAGjQTA/MA4GA1UdDwEB/wQEAwIFoDAMBgNVHRMBAf8EAjAAMB8GA1UdIwQY
+# MBaAFKF88Blhy5xs0hQfn4medNFL3FoXMAoGCCqGSM49BAMCA0gAMEUCIQDwlWDa
+# ojXZG8h5O2XzW/IG9h+GUKAmx8SCd7NuhB0SUAIgJkQlleqNoGkPuDyi08MuVI36
+# ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
+# YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
+# EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEINe5o8Mm
+# hHSTr748IZfgxRzmHaD07tLxF5MzPTbJ1PLtMAsGCSqGSIb3DQEBAQSCAgAR69ai
+# 4YMU+Jk/We9irj+1zA2RP9oWl2jBZuRHrxs4NdjPwRt4ph7WgS34azYj/Fe7iWzq
+# C9FACfW4+hmyhh1xuElt47F5XpTVQbSHNW92Uk4aM9u47NMZY0fHlTwiZTJCyrGf
+# KQVfn1yqYXhM4/d7aocJr7rtsg4R4y8Ste4Xfs6w3WXgtbnw87VahsLIsBHKa2fa
+# 3Qjfu721y+nhJd7khcOYP+KM807CY9D2KGRJCIxdQXgIVVYeGA6BpJAK/nydvWbr
+# FEex2xj+DuhHDJr08KhoRutoRhD+6lZB+eoiKEYk9wdrLsaFO8yOEWZ2qhLLXj6d
+# yhA4fjXtrNjgUQsiFjsTdTNmAZN77jW0AtUYwzCxss3s3KtADVqtvfpnKr86gF6T
+# /KHpjKZ8nvGv49wM80JDahDwUzVqbzoCO6P3jtjYy6AP5yRn+Ko8tYH32pbVwtGk
+# bpnUJjBcxDtT3suxMfTTFSv+0GDjW5itDx9veIkeYE1hswDYZlIINR+VvXnqglfF
+# lLQv+NA/sOnI/Jm0f4mo6S/Y/VYEWGGMb51fvzQbuHZsfQGTGYawgunZTd+yY51v
+# UzMjXohYsAKuLRiII4C1yg+QMA0XvmJh4KyMzAkOERlydW5kG4g5LlK5DDw35Fcr
+# +JP71/kBA9dTQnLjtnGnzKT3FumJm+6JGZQYIKErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block
