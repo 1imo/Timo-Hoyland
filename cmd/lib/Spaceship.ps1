@@ -2,12 +2,16 @@ class Spaceship {
     [string]$BaseUrl
     [string]$ApiKey
     [string]$ApiSecret
+    [Env]$Env
+    [Config]$Project
 
-    Spaceship() {
-        if (-not $env:SPACESHIP_API_KEY) { throw '[!] SPACESHIP_API_KEY is required' }
-        if (-not $env:SPACESHIP_API_SECRET) { throw '[!] SPACESHIP_API_SECRET is required' }
-        $this.ApiKey = $env:SPACESHIP_API_KEY
-        $this.ApiSecret = $env:SPACESHIP_API_SECRET
+    Spaceship([Env]$Env, [Config]$Project) {
+        if (-not $Env) { throw '[!] Spaceship requires Env' }
+        if (-not $Project -or -not $Project.Loaded) { throw '[!] Spaceship requires project.cfg' }
+        $this.Env = $Env
+        $this.Project = $Project
+        $this.ApiKey = $this.Env.Require('SPACESHIP_API_KEY')
+        $this.ApiSecret = $this.Env.Require('SPACESHIP_API_SECRET')
         $this.BaseUrl = 'https://spaceship.dev/api/v1'
     }
 
@@ -37,13 +41,98 @@ class Spaceship {
         } -Body $body | Out-Null
         Write-Host '[+] Spaceship DNS records saved'
     }
+
+    [void] Apply() {
+        $this.Apply(@{})
+    }
+
+    # $SiteTxt: domain → TXT value for @ (e.g. Search Console tokens); merged with project.cfg sites.
+    [void] Apply([System.Collections.IDictionary]$SiteTxt) {
+        $registry = $this.Project.Require('public.dns.registry')
+        $domains = @($this.Project.Get('public.domains'))
+        $pubHost = $this.Project.Require('public.ingress.ip')
+        $dnsCfg = $this.Project.Get('public.dns')
+        if (-not $domains -or $domains.Count -eq 0) { throw '[!] public.domains required in project.cfg' }
+        if (-not $dnsCfg) { throw '[!] public.dns required in project.cfg' }
+        if ($registry.ToUpper() -ne 'SPACESHIP') {
+            throw "[!] public.dns.registry must be SPACESHIP (got $registry)"
+        }
+        if (-not $SiteTxt) { $SiteTxt = @{} }
+
+        foreach ($domain in $domains) {
+            $domain = [string]$domain
+            $items = [System.Collections.Generic.List[object]]::new()
+            $specs = [System.Collections.Generic.List[object]]::new()
+
+            foreach ($prop in $dnsCfg.PSObject.Properties) {
+                if ($prop.Name -in @('registry', 'sites')) { continue }
+                $specs.Add([ordered]@{ Type = [string]$prop.Name; Spec = $prop.Value })
+            }
+            if ($dnsCfg.sites -and $dnsCfg.sites.$domain) {
+                foreach ($prop in $dnsCfg.sites.$domain.PSObject.Properties) {
+                    $specs.Add([ordered]@{ Type = [string]$prop.Name; Spec = $prop.Value })
+                }
+            }
+
+            foreach ($entry in $specs) {
+                $type = [string]$entry.Type
+                $spec = $entry.Spec
+                if ($null -eq $spec) { continue }
+                if ($spec -is [array] -or $spec -is [System.Collections.Generic.List[object]]) {
+                    foreach ($name in @($spec)) {
+                        $items.Add([ordered]@{
+                                type    = $type
+                                name    = [string]$name
+                                address = $pubHost
+                                ttl     = 3600
+                            })
+                    }
+                    continue
+                }
+                foreach ($rec in $spec.PSObject.Properties) {
+                    $row = [ordered]@{
+                        type = $type
+                        name = [string]$rec.Name
+                        ttl  = 3600
+                    }
+                    if ($type -in @('A', 'AAAA')) { $row.address = [string]$rec.Value }
+                    else { $row.value = [string]$rec.Value }
+                    $items.Add($row)
+                }
+            }
+
+            $extraTxt = [string]$SiteTxt[$domain]
+            if (-not [string]::IsNullOrWhiteSpace($extraTxt)) {
+                $dup = $false
+                foreach ($existing in $items) {
+                    if ([string]$existing.type -eq 'TXT' -and [string]$existing.name -eq '@' -and [string]$existing.value -eq $extraTxt) {
+                        $dup = $true
+                        break
+                    }
+                }
+                if (-not $dup) {
+                    $items.Add([ordered]@{
+                            type  = 'TXT'
+                            name  = '@'
+                            value = $extraTxt
+                            ttl   = 3600
+                        })
+                }
+            }
+
+            if ($items.Count -eq 0) { throw "[!] no DNS records to apply for $domain" }
+            Write-Host "[+] Applying DNS ($domain, registry=$registry, ip=$pubHost, records=$($items.Count))"
+            $this.SaveRecords($domain, @($items))
+        }
+        Write-Host '[+] Done — DNS'
+    }
 }
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAi/VdAm/TNLIE6
-# uPv0PN3Q8dtPK9h85GVIfLn7s9CfC6CCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD3D3FObidkBtTb
+# BFWeBcoqiYqD1mkEjvaoME/K3t1A36CCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -64,18 +153,18 @@ class Spaceship {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEICn9lBCP
-# 5hIaOmYBj2vo8kt17rxowVJwXkBy22onUZMVMAsGCSqGSIb3DQEBAQSCAgAr7rgz
-# 2nPC0jIuUnhmTn1D1cG9ifbpNjOVpivdT1iXtTTYKdKqNkgl8WlQSI9jjS3n1/if
-# kM4ybFtyoUKwp4ygZhZ11tCVIAZ8qCPLeBIwZVd81/oMu04shdaze99hTwKW/UUx
-# Y7LujHyIl05f2XZjxm3nXOgUoO3WqGu9WFGCGghTITYKufEecBy2iEFje2LUX6mY
-# gIyVa15+w1HsnMK0JQ07c8Gj2bJrqtD2h5Q6sKohGc+HByO3GqjAzbU/ywWWCNJk
-# 0OKE58a6VMV8masl/BjpDs6F18THmaxaMoAP/GVpnI3pz+yNFP769U+afXkdNR9W
-# JqorOXkgVt4Dwif7pWc2Kcf7j3tAXkg3EN4BhBGsolw2+qmqQ+O3jnYbMujJPA18
-# v9sUKSBBc3DQe8xjug3MK6UXc5SJaYfKbQMVFh5pl2faQErtVO+ddUqueQxxU/XV
-# p44R7w0nwVYUK+VBfCdFGL5wMAMoOB9gtUkioPebRqFunM4vO0vRr7EVtvqZ6YD4
-# AZarM+4fghHrR3kJkXitFt4lEl0GraVJufsa903viEpHl7GzQy0McvbBPAGvrg74
-# cV8FqVc4l580CajmAnFRQHhjCXBDtGsef7uf/Xq/GjTh70K3qesXyn18+8kbRyrC
-# 0f1TrYb0cFaFJVf4Dxtd1cBo0lF9Bn6UCQCnFKErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIPJnmgv6
+# SbFH/U47POKvfNLTj+9YenA8Y9z10mtCaeTVMAsGCSqGSIb3DQEBAQSCAgB48ub5
+# /Bhcf5nOFzNhyTK3cZKa9O3k7SuM0flvdc4FyXsKII3MmNXJSutE4Km9nnKpQeC7
+# qd0u4mBVKuf8+7NXSk3qoiFe/G0fmlWi4OwDbz9eJkpPoMtLWohBCjEzIsgK1CjZ
+# nfStE+IH30TAr4yZZ5WxGiTxkeGnHeHttEt8P7L5CHSlFQ803+nyp2I2YNSMNh3M
+# 7Gm+upoZXE+bhd9UmqXYbj0fbjKxsqVve8JIUbNWat1DgYWRdwM2/VuamPl1xjFt
+# yFZAjT4IP4xdHcG1qrUDS0QT76D1dMpzgIjurJs1NstAwBuPgMbm9tIEvTW1UCoH
+# 0FUKhLnd0wpYFKf1XIP9cY71PTGSErEKuz4zhC7k6gXNdmY4jYmZ+RvHSRzA1j43
+# 26F2BEj9MOaRYS80lfO3RtQB3LkDvAKmHyBnyMG/JfxvTSxLShouq5XyGBOdSOlh
+# Rbt0XZoLiwfZcOiGDh343B2D1zA5hyOUa/3cNN+OBTnIGntidTGNU7/DeEEnaUTW
+# /8xe9y6YFsn3NYFFR6FJMpWQOEfRrwqXzUrR4gI0O4YAcaA2TtwGidbxPv6G04bI
+# 3u0G9CWhxvYMefnI7f5aCfrNf7aFwpquLuZRi1jhyN2ZoB3Yelu4kXP3060u3y/I
+# tUnFVWQ82wyCIG23MA1fvn/+eCDxfe6Pr+4fQqErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

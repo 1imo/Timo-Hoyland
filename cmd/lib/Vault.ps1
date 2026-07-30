@@ -1,12 +1,21 @@
 class Vault {
     [string]$Addr
     [string]$Token
+    [Env]$Env
 
-    Vault() {
-        if (-not $env:VAULT_URL_PUBLIC) { throw '[!] VAULT_URL_PUBLIC is required' }
-        if (-not $env:VAULT_TOKEN) { throw '[!] VAULT_TOKEN is required' }
-        $this.Addr = $env:VAULT_URL_PUBLIC.TrimEnd('/')
-        $this.Token = $env:VAULT_TOKEN
+    Vault([Env]$Env) {
+        if (-not $Env) { throw '[!] Vault requires Env' }
+        $this.Env = $Env
+        $this.Addr = $this.Env.Require('VAULT_URL').TrimEnd('/')
+        $this.Token = $this.Env.Require('VAULT_TOKEN')
+    }
+
+    [string] Staging() {
+        switch ($this.Env.Name.ToLower()) {
+            'live' { return 'live' }
+            'test' { return 'test' }
+        }
+        throw "[!] apply-env only pushes test/live env files (selected ENV=$($this.Env.Name))"
     }
 
     [hashtable] ReadSecret([string]$Path) {
@@ -54,15 +63,9 @@ class Vault {
         $changed = 0
         $unchanged = 0
         foreach ($key in $Data.Keys) {
-            if (-not $existing.ContainsKey($key)) {
-                $added++
-            }
-            elseif ([string]$existing[$key] -ne [string]$Data[$key]) {
-                $changed++
-            }
-            else {
-                $unchanged++
-            }
+            if (-not $existing.ContainsKey($key)) { $added++ }
+            elseif ([string]$existing[$key] -ne [string]$Data[$key]) { $changed++ }
+            else { $unchanged++ }
         }
         $removed = 0
         foreach ($key in $existing.Keys) {
@@ -81,8 +84,8 @@ class Vault {
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCB07K8XbtRoqVok
-# H/PHGcPxZmE9sv814+7ykaKdWatJwKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCC9r2RNyGSuCi5O
+# pue1Ns/aGiRuD1URk5xT6Mv4lWJUWqCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -103,18 +106,18 @@ class Vault {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEILmuAcGZ
-# 9WEk9RnpPEB/2aX9fQt4sbZejdEP8MiCeTX8MAsGCSqGSIb3DQEBAQSCAgAA3tnl
-# o4hIkD6cDY1aWHkdPW7ljAj6zk+lu6D2F56FSl7hdT7Ei3ecPyyVSiFXeeyCX5kd
-# RiO4Qw/eAHw+MvQGlwr09db+znQlLHav6ASCFYLXeOxp5PVeeE6QNTZJ1hgy1LpZ
-# t/kUyJUkBsU66WmfkJ2/NRdB3156p5u/K3IBgRaRPwGl1u0TSLhM4+1qkfGJu9Oi
-# dKe7Ny1VIuKcis4qja/gqA8YTWy+kyeK6c2Am2AokaV571ulgSRBTmPF5CW4eOEs
-# FDONG74Jsfuuhozn2HGaTrQkj5bZ+LWsD65pg76Irhz3Kumtuqzdk64f1DQ5oYis
-# EKWGi2F4PcmsB/QJuor65ghE9NDx5fioHTaMcmK934+ViXB8Dl4Fsz41urekIw2x
-# YZBLaohfDPnkF4G6k8ro7Y7Y9GNn8jLQzLWUnD4CbnAiH2p9XP9f05C/xK3F+raH
-# HoEZeH/lkI9QcM+jWzJGoC87+5mQQ9MB/pgmHdipO+nPj7mZzxdCO3umcLBfKJLy
-# YWy8yNFYNaSh5qNNdQYLDCLNdj7YPozMaSTOozPtKnNHyM7swVG734BNVsOX4Mwm
-# WGvJef0fPsVmYpkaP4oFs4L/a67+YXwVoitk6pdHPUWK887jJgweU9IlSBBNat/r
-# rJbsTJE3ctlu7ajY05qBRWjRuZRZ7br2c0ZbPaErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIBWKG8Sy
+# qq+nYXX5pn9Xy9Hj5Utii6yWwdP54+IsPv+NMAsGCSqGSIb3DQEBAQSCAgBUIx4/
+# sdAUOEQy5fAP6vPNvmcJpWJhNvl08Ovhp4vS6s7ppqFzZZwj4x3GQ9Lw/n5a74kw
+# WOr/gAnO77Ic6u+RtlV3YkihhbWmFTj5zlSzI5h/39ZiEpD3kne1F1I49AyUIGOA
+# pg2+FsQq5oyAp7sj4bwXbkBvcpOvv52TLu/m2n532i41keMak1jHyqJes0XWhl12
+# NO1T67Co5ftMMcaYmKdpINX6cNkTRw6+IZWVZG0kXQG3nI1g8ONdYT6ienMyDxNk
+# kCMWTKo8ZfV+VM3Km4hBwNdE4fxozyVU3p2dymik8n+hgdQs5gxHFcKyxgGNVunN
+# bWBszsIBeL7Ct617ApGkWeI/03bcVGgY5juMOi5w1YBOe0YWyCdVhXllgQNTe/A+
+# J3kSdz0fZTpLFTlSFVq6Wit0k05O2s9zYgZmC6cdwzAEbPb+msBSJcIj3HQfo9+U
+# YTLmNX9UlEXVaT0xiPr6XWU3oiTwzqw30Vcl+uIJMOPCZ2IDTFp+is9c2onnbSh9
+# gxMQo8PvvaiJEQOyKCmRiR40uh8Huh8vA1Uo+7lG2c9ohvC52JkmKphqDln25T7f
+# iziqwksLuUWgCz9AeyGL1HY6YAxdrDhVBSId9EJFoT+O1Tguevok7WSj4GcvkOJ2
+# CcfYzvh6crh1BtRD51HOGpnGW5ihzUz/3HSMPKErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

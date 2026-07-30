@@ -5,6 +5,141 @@ class Config {
     [string]$Name
     [bool]$Loaded
 
+    # Pinned settings.cfg.sig — update when re-signing settings.cfg.
+    hidden [string]$ExpectedSettingsSigFormat = 'cms-detached'
+    hidden [string]$ExpectedSettingsSigKeyName = 'nottinfra-config'
+    hidden [string]$ExpectedSettingsSigDigest = 'sha256:b288364d4a942ae1b95bcc7c51de675ea679d44cad73635571caa5ca8c9136f6'
+    hidden [string]$ExpectedSettingsSigUrl = 'https://nottinfra.co.uk'
+    [string]$PinnedOpenSearchPublicUrl = 'https://opensearch.nottinfra.co.uk'
+
+    hidden [string] ExpectedSettingsSigCmsPem() {
+        return @'
+-----BEGIN CMS-----
+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
+xd/L5kXuWvM2/wdC98tKOYpC2AA2C51tFBcC5A==
+-----END CMS-----
+
+'@
+    }
+
+    hidden [string] ExpectedSettingsSigCertPem() {
+        return @'
+-----BEGIN CERTIFICATE-----
+MIIDVTCCAvugAwIBAgIRAKDf2sb4UMzR8nVYLvQZP0IwCgYIKoZIzj0EAwIwIDEe
+MBwGA1UEAxMVTm90dEluZnJhIEludGVybmFsIENBMB4XDTI2MDczMDEwNDM0NloX
+DTI3MDczMDEwNDM0NlowKjEoMCYGA1UEAxMfTk9UVElORlJBIExJTUlURUQgQ09O
+RklHVVJBVElPTjCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAL3YgBVF
+K2PeAf80KLpf/mWyj/RFSB6u4koA8tvCVr16IUrufXqf7fhW9Qh0K2aYdEdcTO1A
+f3XvkMk8mNrnMMhgbtrz3mMMXX81xzYcYUHXeVZE3m4X1M04Lcoq9o8AlYMXCU0a
+1MGJL6bHcuk85GYm/P+2pqsveruR8kSn0VYxhvrbxWJx4VzIObvvfi0LDWCN2YYC
+7njpG73JzW3IGcmTAim0zE3E7VW9gvSyu1GDejDNPR9hMJrw/OTwX9b35JPV+jan
+KF59XW0oL18sIqPl0/QtUpOal9TYUeihypiBlfuy03e8lZ80mKqmIB3JTLsXv0Le
+WxjTHnkdH7y927oGOtoFFUY0mDzEQTifsVuEQDmTCqTrItgWkhUEGP0lp0JU6pTs
+cyIedgKF253mMtdwoE7Ncp3Tb2L/A109B6QoFyNBDiGcjjDsRzeryHwAfcFmSkNb
+ouBPrNjBI8ALjSa/v+5JVAnPOMjohlkci7yDS+gVwKONUyxUYjrkKy3/K0UZcuJJ
+Gd50Xz0hJ6TxSeXsc1T3vn0eE3WSgB9aP3sdNpuNkz+U2SiP8yoOlrWsrwOTCBYG
+wRxkMC1wJXgcbtI7NpD/1zNy53uzm0Ei7LV5HUlZZ0EMG+QNS/jPpkVhTNhjxzcE
+000+ytLBuFla0UeHluMX6/ZhKGQeoIhXu8rVAgMBAAGjQTA/MA4GA1UdDwEB/wQE
+AwIFoDAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFKF88Blhy5xs0hQfn4medNFL
+3FoXMAoGCCqGSM49BAMCA0gAMEUCIQDzbVV7ImHLZH//KhhpQnAlF59TJPVSYHoF
+pNJAwHtWCgIgT5dcCskZLN7DvjSaNesTmclhoLqjylNlyqHlkjxeOKo=
+-----END CERTIFICATE-----
+
+'@
+    }
+
+    hidden [string] UnsignedSettingsErrorPrefix() {
+        return '[!] UNSIGNED_SETTINGS_CFG'
+    }
+
+    hidden [string] NormalizePem([string]$Text) {
+        if ($null -eq $Text) { return '' }
+        return (($Text -replace "`r`n", "`n") -replace "`r", "`n").TrimEnd() + "`n"
+    }
+
+    hidden [void] AssertSettingsSigned([string]$SettingsPath) {
+        $sigPath = $SettingsPath + '.sig'
+        $prefix = $this.UnsignedSettingsErrorPrefix()
+        if (-not (Test-Path -LiteralPath $sigPath)) {
+            throw ($prefix + ': missing ' + $sigPath)
+        }
+        try {
+            $sig = Get-Content -LiteralPath $sigPath -Raw -Encoding utf8 | ConvertFrom-Json
+        }
+        catch {
+            throw ($prefix + ': cannot parse ' + $sigPath + ' (' + $_.Exception.Message + ')')
+        }
+
+        $checks = [ordered]@{
+            format          = $this.ExpectedSettingsSigFormat
+            key_name        = $this.ExpectedSettingsSigKeyName
+            digest          = $this.ExpectedSettingsSigDigest
+            url             = $this.ExpectedSettingsSigUrl
+            cms_pem         = $this.ExpectedSettingsSigCmsPem()
+            certificate_pem = $this.ExpectedSettingsSigCertPem()
+        }
+        foreach ($key in $checks.Keys) {
+            $expected = [string]$checks[$key]
+            $actual = [string]$sig.$key
+            if ($key -in @('cms_pem', 'certificate_pem')) {
+                $expected = $this.NormalizePem($expected)
+                $actual = $this.NormalizePem($actual)
+            }
+            if ($actual -ne $expected) {
+                throw ($prefix + ': ' + $sigPath + ' ' + $key + ' does not match pinned signature')
+            }
+        }
+
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $got = ''
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($SettingsPath)
+            $hex = ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
+            $got = 'sha256:' + $hex
+        }
+        finally {
+            $sha.Dispose()
+        }
+        if ($got -ne $this.ExpectedSettingsSigDigest) {
+            throw ($prefix + ': settings.cfg digest ' + $got + ' does not match pinned ' + $this.ExpectedSettingsSigDigest)
+        }
+    }
+
     Config([string]$FileName) {
         if ([string]::IsNullOrWhiteSpace($FileName)) { throw '[!] config file name required' }
         $this.File = $FileName
@@ -12,11 +147,12 @@ class Config {
         $this.Tree = @{}
         if (-not (Test-Path $FileName)) { return }
         $this.File = (Resolve-Path $FileName).Path
+        if ([IO.Path]::GetFileName($this.File) -eq 'settings.cfg') {
+            $this.AssertSettingsSigned($this.File)
+        }
         $this.Tree = $this.ReadYaml()
         $this.Loaded = $true
-        if ((Split-Path $FileName -Leaf) -eq 'settings.cfg') {
-            $this.Data = $this.FlattenNode($this.Tree, '')
-        }
+        $this.Data = $this.FlattenNode($this.Tree, '')
         $projectName = [string]$this.Get('project')
         if (-not [string]::IsNullOrWhiteSpace($projectName)) { $this.Name = $projectName }
     }
@@ -24,18 +160,14 @@ class Config {
     [object] Get([string]$Path) {
         if ([string]::IsNullOrWhiteSpace($Path)) { return $this.ToObject($this.Tree) }
         $node = $this.Tree
-        $found = $true
         foreach ($part in $Path.Split('.')) {
-            if ($null -eq $node) { $found = $false; break }
+            if ($null -eq $node) { return $null }
             if ($node -is [System.Collections.IDictionary] -and $node.Contains($part)) {
                 $node = $node[$part]
             }
-            else { $found = $false; break }
+            else { return $null }
         }
-        if ($found) { return $this.ToObject($node) }
-        # settings.cfg list entries (KEY=value) live in flattened Data
-        if ($this.Data.ContainsKey($Path)) { return $this.Data[$Path] }
-        return $null
+        return $this.ToObject($node)
     }
 
     [string] Require([string]$Path) {
@@ -44,6 +176,96 @@ class Config {
             throw "[!] $Path not set in $($this.File)"
         }
         return [string]$val
+    }
+
+    hidden [string] EndpointNetwork([string]$Network) {
+        $n = "$Network".ToLower()
+        if ($n -eq 'cluster') { return 'CLUSTER' }
+        if ($n -eq 'public') { return 'PUBLIC' }
+        throw "[!] NETWORK must be cluster or public (got $Network)"
+    }
+
+    [string] Endpoint([string]$Service) {
+        $network = if ($env:NETWORK) { $env:NETWORK } else { 'public' }
+        return $this.Endpoint($Service, $network)
+    }
+
+    [string] Endpoint([string]$Service, [string]$Network) {
+        if ([string]::IsNullOrWhiteSpace($Network)) { $Network = 'public' }
+        $kind = $this.EndpointNetwork($Network)
+        return $this.Require("ENDPOINTS.$($Service.ToUpper()).$kind")
+    }
+
+    [hashtable] EndpointEnvVars([string]$Network) {
+        $kind = $this.EndpointNetwork($Network)
+        $out = @{}
+        $eps = $this.Tree['ENDPOINTS']
+        if (-not ($eps -is [System.Collections.IDictionary])) { return $out }
+        foreach ($svc in @($eps.Keys)) {
+            $val = $this.Get("ENDPOINTS.$svc.$kind")
+            if ($null -eq $val -or ($val -is [string] -and [string]::IsNullOrWhiteSpace([string]$val))) { continue }
+            $out["$([string]$svc)_URL"] = [string]$val
+        }
+        return $out
+    }
+
+    [void] ApplyEndpoints([string]$Network) {
+        foreach ($entry in $this.EndpointEnvVars($Network).GetEnumerator()) {
+            Set-Item -Path "env:$($entry.Key)" -Value $entry.Value
+        }
+    }
+
+    [void] Save() {
+        if (-not $this.Loaded -or [string]::IsNullOrWhiteSpace($this.File)) {
+            throw '[!] cannot save unloaded config'
+        }
+        $lines = [System.Collections.Generic.List[string]]::new()
+        $lines.Add('# Project manifest')
+        $lines.Add('')
+        $this.WriteYamlNode($lines, $this.Tree, 0)
+        while ($lines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+            $lines.RemoveAt($lines.Count - 1)
+        }
+        Set-Content -Path $this.File -Value ($lines -join "`n") -Encoding utf8
+        if (-not ((Get-Content -Path $this.File -Raw) -match '\n\z')) {
+            Add-Content -Path $this.File -Value '' -Encoding utf8
+        }
+    }
+
+    hidden [void] WriteYamlNode([System.Collections.Generic.List[string]]$Lines, [object]$Node, [int]$Indent) {
+        $pad = ' ' * $Indent
+        if (-not ($Node -is [System.Collections.IDictionary])) { return }
+        foreach ($key in $Node.Keys) {
+            $child = $Node[$key]
+            if ($child -is [System.Collections.Generic.List[object]] -or $child -is [array]) {
+                $Lines.Add("${pad}$($this.QuoteYamlKey([string]$key)):")
+                foreach ($item in @($child)) {
+                    $Lines.Add("$pad  - $($this.QuoteYaml([string]$item))")
+                }
+                continue
+            }
+            if ($child -is [System.Collections.IDictionary]) {
+                $Lines.Add("${pad}$($this.QuoteYamlKey([string]$key)):")
+                $this.WriteYamlNode($Lines, $child, $Indent + 2)
+                continue
+            }
+            $Lines.Add("${pad}$($this.QuoteYamlKey([string]$key)): $($this.QuoteYaml([string]$child))")
+        }
+    }
+
+    hidden [string] QuoteYamlKey([string]$Key) {
+        if ($Key -match '[:#\[\]\{\},&*!|>''"%@`]|^\s|\s$|^\?|^-') {
+            return "'" + ($Key -replace "'", "''") + "'"
+        }
+        return $Key
+    }
+
+    hidden [string] QuoteYaml([string]$Value) {
+        if ($null -eq $Value) { return '""' }
+        if ($Value -match '[:#\[\]\{\},&*!|>''"%`]|^\s|\s$|^[-?]') {
+            return "'" + ($Value -replace "'", "''") + "'"
+        }
+        return $Value
     }
 
     hidden [hashtable] FlattenNode([object]$Node, [string]$Prefix) {
@@ -58,17 +280,6 @@ class Config {
             if ($child -is [System.Collections.IDictionary]) {
                 foreach ($entry in $this.FlattenNode($child, $path).GetEnumerator()) {
                     $out[$entry.Key] = $entry.Value
-                }
-                continue
-            }
-
-            if ($child -is [System.Collections.Generic.List[object]]) {
-                foreach ($item in $child) {
-                    $line = [string]$item
-                    if ($line -notmatch '^([^=]+)=(.*)$') {
-                        throw "[!] invalid settings entry at ${path}: $line"
-                    }
-                    $out["$path.$($Matches[1])"] = $this.Unquote($Matches[2].Trim())
                 }
                 continue
             }
@@ -105,7 +316,7 @@ class Config {
 
             if ($line -notmatch '^(\s*)([^:]+?):\s*(.*)$') { continue }
             $indent = $Matches[1].Length
-            $key = $Matches[2].Trim()
+            $key = $this.Unquote($Matches[2].Trim())
             $value = $Matches[3].Trim()
             $this.TrimStack($stack, $indent)
             $frame = $stack[$stack.Count - 1]
@@ -170,11 +381,12 @@ class Config {
     }
 }
 
+
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCArvO7e1C3OrAis
-# 8FUpX+KnUJAbhUJR+3a6r/0CrJkpaqCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDQfSLh4CQptLHU
+# Z94DzSSdh9zoq7ZYIBjh9ePpqaCxHqCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -195,18 +407,18 @@ class Config {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIEnk/y14
-# iQX76OiTTl0cPJwTeuTr+bxCfgd36QjOQizRMAsGCSqGSIb3DQEBAQSCAgB71RmL
-# Mg+oAbTi7gW38qbHt/IWu4ph9bdcZz9XH3H1zXonnR9fubfm8QCivitTV23r412V
-# HFmvPZxj6gCh5baijYMZLq00YdQwxGD5B0MqvZyOUkvW+HLJf9TcnSgY/9DLVB36
-# M/Uz0xl5irfhMk0zeCQ0yjd55vONogaXFH8XC3rNcytgJC+elv7nk1mzd/GB0Ifd
-# Pa39kNpT5LQN/+rqHFNFELs/AoOKLoc85jtQccu8/fO6tyirpZNQl2RGSwzVdTIF
-# x3jIeJWna9MWcTcspjQXP4tyXc3oDZ/+rOnuw0W5MvClNm0/DBZggSdutsqShi9l
-# TWTQnN7f2Hm+OiG3F4H48483g0Odh4njODdjL304UNT4NnE6/Vd5ZL456PLMDlda
-# HPvkmfGIS22qHvgSjjYLzfRiWUH1qBi8gCHDRx8ModfonrzxfSqPfpbiitJ+t1r4
-# 3yHWC5aC7fGFjJiKBxTkVOgPdO3GGHnUn7cfuxAzfO74bcLmYlOD9gL2qvk53qah
-# kozWTTZapRv6xqCR+yTKM37AsHUNv+zYLvIYT52CWmbqR6Qbikx1SrojKs+AkXRW
-# vX8x3pQoPVXfUOfrnXWld3z81khSzvIUVjKOLeGz/DPda6c5+PljNZx2X6BQfzpX
-# UZzOkhmv+OYLHNDZwSCF20SSk24g4eZijF/EUaErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEINzFSS17
+# CNDHIm5dkhpwOJUiR9bHg1fqH+nUoDUYIsvyMAsGCSqGSIb3DQEBAQSCAgCSpyoI
+# bVF/KSS1Kw1DhAFPrqj9UC1SHHMYjF6Sjy0mMxZhmoI/TN0qfyhYFgSUcGpa6+IR
+# d2jDwm5soQDCaS6nZgYHERXiWFnhHcgeP+IcjDCwtsbUume9u+PI+f+pdfQXTM+B
+# K7XPVra0kMdXX57Z0h7wWF2zLSyP4jldx1OJsbrBNqw2WjEPczHsD8k7sOPaoRq+
+# 5S/h92WfiWlzjrcmVjm+idGhAEyGNftgyTSnD7h9rE72EqL/qEfIM0T/QTaLISSd
+# bvYlMT7JxMRYqVE3Gz39gqjsUgVd69IxaHyaIct2koWlvqIK2cz8TEQJFe8AizoJ
+# ZlK87OTNJvV9c4amC/7v1Mflwoaebzn4n5nQC/u83iUZc7p9BJsicDSiqAEJEjJv
+# I1XREGX7l2xfhiS+5601KS+p1BOChHUjFKYkuVVNh5po52hLG15d8LQrM4fKoRpp
+# 05OPDD4k6XXvg73j1UjLMCyYe0YTzY6NBMymQxJGATEBrg+3410EGlQ35Mg5ZMsL
+# 9Z8xYZHM9xV4iaxd3Cyr8xyyZSS1TxM8M/LpVH46YT9uT5nhO50RabWDHmrkioYG
+# 1S1gzgsJMkdOHNZfgjIt05HhSS0Qw3A52P38vZhdPhoW9q9KZlOrlbcp9Lnnaidv
+# KVQZZkK0zp+N8wfSVLYxQAm4Dgt09jpKAsD6BqErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

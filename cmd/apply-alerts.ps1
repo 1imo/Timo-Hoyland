@@ -3,22 +3,45 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/lib/Env.ps1"
 . "$PSScriptRoot/lib/Config.ps1"
-. "$PSScriptRoot/lib/Kibana.ps1"
+. "$PSScriptRoot/lib/OpenSearch.ps1"
 . "$PSScriptRoot/lib/Grafana.ps1"
 
-[void][Env]::new()
-$project = [Config]::new('project.cfg')
-
-Write-Host "[+] Applying alerts (ENV=$($env:ENV))"
-[Kibana]::new($project.Name).ApplyAlertingRules()
-[Grafana]::new($project.Name).ApplyAlertingRules()
-Write-Host '[+] Done — alerts'
+$Env = [Env]::new()
+$Project = [Config]::new('project.cfg')
+$os = $null
+try {
+    $Settings = [Config]::new('settings.cfg')
+    $Env.BindConfig($Settings, $Project)
+    $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd")
+    $os.Step('apply-alerts', 'started')
+    Write-Host "[+] Applying alerts (ENV=$($Env.Name))"
+    $os.ApplyAlertingMonitors()
+    if (Test-Path 'alerts/grafana.json') {
+        [Grafana]::new($Project, $Env).ApplyAlertingRules()
+    }
+    else {
+        Write-Host '[i] alerts/grafana.json missing — skipping Grafana rules'
+    }
+    Write-Host '[+] Done — alerts'
+    $os.Step('apply-alerts', 'succeeded')
+}
+catch {
+    if ($_.Exception.Message -like '*UNSIGNED_SETTINGS_CFG*') {
+        if (-not $os) { $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd") }
+        if (-not $os.Url) { $os.Url = $Project.PinnedOpenSearchPublicUrl.TrimEnd('/') }
+        $os.Step('apply-alerts', 'failed', @{ event = 'unsigned_settings_cfg'; error = $_.Exception.Message })
+    }
+    elseif ($os) {
+        $os.Step('apply-alerts', 'failed', @{ error = $_.Exception.Message })
+    }
+    throw
+}
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCGGu8/u8OdqO9v
-# J+PVM9wfMy53oWXksq4M3/SlFNNgVaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBh50WrgeIWJvv/
+# ZWlaWL8oaCMETdjIDyO1dtItiV0vEaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -39,18 +62,18 @@ Write-Host '[+] Done — alerts'
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEINaAkr6g
-# od5xbQNNYMul03jqQXuX4Lv1BMzvXj1iXxWTMAsGCSqGSIb3DQEBAQSCAgBnaoMz
-# bSSY0SnuWaS31BGl4tu2LDZNjBn4+GSIPqoHdxbH23uV39kf/nl2X2TmjNTv9F4s
-# QqjuUWmV3GFUy8aZ4FRVthhr90CVqFOTRP/JiZNiqEr45f1nbWxr5ocsL1lDe75P
-# zSuSwL1ZDnXtnnAlrYFqKZKmmkTZ2FXRIctts9cv0CPRqr0XMJV3X0za7hIVK8KA
-# 7yeHeC2/QJbsHG1gzxC1kjJJcwbHG7/L2n+uwCuGZ7H577VSiQNgm2uUetufDq1Y
-# t7ohw+Yg8+HSivuKoxnLnSCzUBVtDC3LippUYrvbV6qaNKzzpHWEOYLSulKRDnjY
-# kDDpmTxWu9pw4Ma3azkmVhzM6tqPa/F6fDPMusq1gWEMycmcaluyaeFlg+8uLOIx
-# U7dfJ9+HBWJHCT8DZdzRYo8M+C8XZ3hXm28LEJ65s79jVeo7wMmnAV/rWr4tams/
-# S8Pw0iXwQPvymwdQZWdTjwcYyt993ifU+eAq36xoTl6eonP00hlNuiSXTLhdwMaV
-# GY0oLlPc4X6RdIXPY7N3VTPTEWje1IWBfvq0JRfKLcgtGZ7lJKoWWxF5bzbEXaSF
-# KAJKqriV9ryG1EPBt/vyshFHYaKLAejkuaoR6gRRQs0k9COZ6bjT7s1UDV0IrEXf
-# fizIRgn6G796qr59Rek4ZWziQPGp2dNAXPVuk6ErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIHTVO1+H
+# jOyAFJijqkUXqUPykw3U9p6i4W5r0SvFBBNZMAsGCSqGSIb3DQEBAQSCAgB/jWld
+# G/90Y18qijzEB7KZzouuVzdZAS3tXQLIsV0Oi+K1Z38ney5sU5l5waVL2WYhDxqV
+# qgnCfL98zp2+oPtuXgbDetzEMSiPvU6hGdItJIzCedMIM4pRPhNdqZdyetbj9vIv
+# WQeLCLuwDbk+Rgw8ZF59J7MoTw1pis+7ISZvOQfP8WQegHGCBs3vcRCuIEh6XuxT
+# otBAbgbjTRiGAFYtKvm2kGuHZQgEZgiCReeocZNsPXelLcZE5Qbrn6Wii+8PU9CH
+# nMoYyCjks0/wDHGicVuCNM3VilznLNHpoyeOJIhZztUzQ88VCQIPN5H1BbzONR2a
+# PXx3BWkUkv0/UzN4ClWOW1+DKxerEYNAyea4PZHwkCsZW0Ta90W0yOxLNVznNDsk
+# JIsG9zcrKwKu0hP6tl6rACHpfkUJ8pML4+QXClRUdwwjCrZ9UmqJBvj49mdmTNpE
+# AOOJbvmEExgNDTFJ5+RnUmGDPFyHOg9oozz6jQuMs49rI/F25LoUPWXFrxCaUNbD
+# Y7l9SfnxpuAthFz92l83RkOVc281oZ+oW6kKliLb+KEgs0weEogGOkZzCqViTeHj
+# 9rwj8ueARZKh0sONWVcsVJnXoGbfrzc3wkfWLbQjPbk8w+Uwr0ZJpO+jbmQtgjkU
+# YKE1bXx7klgFheSxI3nx7SMGoBNHd/qGbE/RA6ErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

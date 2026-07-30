@@ -1,22 +1,20 @@
 class Grafana {
     [string]$Url
     [string]$UserPass
-    [string]$Env
-    [string]$ProjectName
+    [Env]$Env
+    [Config]$Project
 
-    Grafana([string]$ProjectName) {
-        if (-not $env:GRAFANA_URL_PUBLIC) { throw '[!] GRAFANA_URL_PUBLIC is required' }
-        if (-not $env:GRAFANA_ADMIN_USER) { throw '[!] GRAFANA_ADMIN_USER is required' }
-        if (-not $env:GRAFANA_ADMIN_PASSWORD) { throw '[!] GRAFANA_ADMIN_PASSWORD is required' }
-        if (-not $env:ENV) { throw '[!] ENV is required' }
-        $this.Url = $env:GRAFANA_URL_PUBLIC
-        $this.UserPass = "$($env:GRAFANA_ADMIN_USER):$($env:GRAFANA_ADMIN_PASSWORD)"
-        $this.Env = $env:ENV
-        $this.ProjectName = $ProjectName
+    Grafana([Config]$Project, [Env]$Env) {
+        if (-not $Project -or -not $Project.Loaded) { throw '[!] Grafana requires project.cfg' }
+        if (-not $Env) { throw '[!] Grafana requires Env' }
+        $this.Project = $Project
+        $this.Env = $Env
+        $this.Url = $this.Env.Require('GRAFANA_URL')
+        $this.UserPass = "$($this.Env.Require('GRAFANA_ADMIN_USER')):$($this.Env.Require('GRAFANA_ADMIN_PASSWORD'))"
     }
 
     [void] EnsureFolder([string]$FolderUid, [string]$Title) {
-        $uid = "$($this.ProjectName)-$FolderUid"
+        $uid = "$($this.Project.Name)-$FolderUid"
         $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($this.UserPass))
         $headers = @{ Authorization = "Basic $auth" }
         $code = 200
@@ -29,23 +27,23 @@ class Grafana {
         }
         if ($code -eq 200) { Write-Host "[+] Grafana folder exists: $uid"; return }
         if ($code -ne 404) { throw "[!] Grafana folder GET HTTP $code" }
-        $body = (@{ uid = $uid; title = "$($this.ProjectName) / $Title" } | ConvertTo-Json -Compress)
+        $body = (@{ uid = $uid; title = "$($this.Project.Name) / $Title" } | ConvertTo-Json -Compress)
         Invoke-RestMethod -Method Post -Uri "$($this.Url)/api/folders" -Headers $headers -ContentType 'application/json' -Body $body | Out-Null
         Write-Host "[+] Grafana folder created: $uid"
     }
 
     [string] PrepareDashboard([string]$File, [string]$Slug) {
         $dash = Get-Content $File -Raw | ConvertFrom-Json
-        $dash.title = "$($this.ProjectName) / $Slug ($($this.Env))"
-        $dash.uid = "$($this.ProjectName)-$Slug-$($this.Env)"
+        $dash.title = "$($this.Project.Name) / $Slug ($($this.Env.Name))"
+        $dash.uid = "$($this.Project.Name)-$Slug-$($this.Env.Name)"
         if (-not $dash.tags) { $dash.tags = @() }
-        if ($dash.tags -notcontains $this.ProjectName) { $dash.tags += $this.ProjectName }
-        if ($dash.tags -notcontains $this.Env) { $dash.tags += $this.Env }
+        if ($dash.tags -notcontains $this.Project.Name) { $dash.tags += $this.Project.Name }
+        if ($dash.tags -notcontains $this.Env.Name) { $dash.tags += $this.Env.Name }
         if ($dash.templating -and $dash.templating.list) {
             foreach ($item in $dash.templating.list) {
                 if ($item.name -eq 'environment') {
-                    $item.current = @{ selected = $true; text = $this.Env; value = $this.Env }
-                    $item.options = @(@{ selected = $true; text = $this.Env; value = $this.Env })
+                    $item.current = @{ selected = $true; text = $this.Env.Name; value = $this.Env.Name }
+                    $item.options = @(@{ selected = $true; text = $this.Env.Name; value = $this.Env.Name })
                 }
             }
         }
@@ -72,7 +70,7 @@ class Grafana {
         if (-not $files) { Write-Host "[i] Grafana: no dashboards in $Dir"; return }
         foreach ($f in $files) {
             $slug = [IO.Path]::GetFileNameWithoutExtension($f.Name)
-            $folderUid = "$($this.ProjectName)-$slug"
+            $folderUid = "$($this.Project.Name)-$slug"
             $this.EnsureFolder($slug, $slug)
             $dash = $this.PrepareDashboard($f.FullName, $slug)
             $this.ImportDashboard($dash, $folderUid)
@@ -81,14 +79,14 @@ class Grafana {
 
     [void] ApplyAlertingRules() {
         if (-not (Test-Path 'alerts/grafana.json')) { throw '[!] Missing alerts/grafana.json' }
-        Write-Host "== Grafana alerting rules: $($this.Url) (ENV=$($this.Env)) =="
+        Write-Host "== Grafana alerting rules: $($this.Url) (ENV=$($this.Env.Name)) =="
         $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($this.UserPass))
         $headers = @{ Authorization = "Basic $auth" }
         $doc = Get-Content 'alerts/grafana.json' -Raw | ConvertFrom-Json
         $this.EnsureFolder($doc.folder.uid, $doc.folder.title)
-        $folderUid = "$($this.ProjectName)-$($doc.folder.uid)"
+        $folderUid = "$($this.Project.Name)-$($doc.folder.uid)"
         foreach ($rule in $doc.rules) {
-            $json = ($rule | ConvertTo-Json -Depth 50 -Compress) -replace '__ENV__', $this.Env
+            $json = ($rule | ConvertTo-Json -Depth 50 -Compress) -replace '__ENV__', $this.Env.Name
             $parsed = $json | ConvertFrom-Json
             $parsed.folderUid = $folderUid
             $json = $parsed | ConvertTo-Json -Depth 50 -Compress
@@ -121,8 +119,8 @@ class Grafana {
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCA6w8WOBBmlz3w3
-# KEZfxe/OmGBpKVrjuTVgLmrEMKeiK6CCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCjzIZ+sWB91qSD
+# LIh9/+IA6I30KJWrccF2rtbrrRgAv6CCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -143,18 +141,18 @@ class Grafana {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIPkbqobF
-# fIUGpoZ7Xk/gKn4SQ/8+TVvpOigE9k4ywJjIMAsGCSqGSIb3DQEBAQSCAgB2ynzr
-# 0PLCCqZ917ZwOAdcqg+/mT5yFs4OPXlAbSplNeyEhNEh0KY3yRVfrmX7b1cxown6
-# DVax69PS57gSrTsRgLnJwa3No+EHXPR/cPI7YOUigeHsbwnn0uso/X83ZXcHOFjX
-# NnPhRSUjZmFG8lHyS3PPB3dJ79GopAflnD0KYnI7sfHCU8QaREWLO6oiq7bSMtsa
-# ce6SWoLLxBDVsCmSZzOp35lZLiYRDwoll9VPS3QkQmyM5ca0i+LRbN3uTDWQeNN2
-# B820Xmk9pQQkn5cCyW+0/ZfVzZVzSbbB7AuR8jaJxhYzntxv7Xhf65UekdHFNdpM
-# GglvMGE9kiD4Gm0VeTDmG2zHIoOL17OlEKCoyhvY3bPR0WzrbfKttLS9rn1x6yl4
-# NLLwKkqpTXjpz0qHyfRStZXatnkf3jggp33A/XlQCOJUgQQATRRAZgLCr3qe64Hx
-# HLHf4pK7n9UwvD4eVKP6/6OHbCzQpkmBdXnWcSzG6VwfvR/DjIfyUn23qgTli0sy
-# kTCv9SV4wWjuL/kU24zilPw7QoQiJMhd6nQW4vTCDuZjovwUk1w+tC9I2Mq14FEo
-# BrWS61NEsHi3mLgdl7y3Zf3pv5CKEuA+hxY3ask6H/SYicKpmTadwvBgKV1p6Hm/
-# 96bSFxofANB8AwTZ31kMK5cascF8UVVn3juXxaErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIL/fasig
+# FxrKZDW87W4pd+m94DDKh9BCmdLP6GhqCvJfMAsGCSqGSIb3DQEBAQSCAgA++8yw
+# D5fUHS4Sde7gpNigVrgsD8wmuoliXRhQTA+MULhdrm4hB5bGdgoRLWOqOfP5JHux
+# C+fES4z35x6t4w4RmJ1DYZxAoNXQ/pFqjGgOXxTLGgZBMR3nSopx9UMk+IPbxP1c
+# VsbPPjebzdPL8s2pb5hdRKkEZlV3NHTv2jDTqfLH3lSh6JWSbKmqhatEUU/PjKyI
+# 5ogJNGLEeEWDECBCuytbpEweZYCCvZDKunU9cu4GUNN6Fdg2AMQ3VYGlbnj2R9TW
+# Og2q/IB2Wp3HwZZJ2frxhROwJnhqfn9b3qM9Q3kiCwMrUlgVirqXJDhZYy8p+V/I
+# B0IaJwSlFDyMs7NfY/k+cD+TQyF7mzVA3kuqphiXYV7NUCpvZHszJUcmX4g0Xbpq
+# 5PEpjynLjcRz02qcc0uPuKmAYYX7Mi+/OrKbpwvWBD7iIucD/2eINoyWNViStBN4
+# seekeOa4w4ZF7f2CX0Z07QxzWXWBxP8Exxv74ZS25m/wrkQsUWKmZN+SDCWMtv2r
+# Hlb7372IpIvlxwHedBfq2n6k4lUOBHUDWq5rSC+WPI4ayq1++ufR/XU2sc1oL64S
+# VKjBC235BHORM5hjoWGDy7jjMv06Ilj7/VBYN1olMJwUQTONlBauelvex8ufezeJ
+# N5QPqmZzzpiCrykaksVTh7avirs1RqwzXWqu/6ErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

@@ -4,13 +4,17 @@ class GitHub {
     [string]$Repo
     hidden [string]$Gh
 
+    GitHub() {
+        $this.Gh = $this.ResolveGh()
+    }
+
     GitHub([string]$Remote, [string]$LocalPath) {
         $this.Remote = $Remote
         $this.LocalPath = $LocalPath
-        $this.Gh = [GitHub]::ResolveGh()
+        $this.Gh = $this.ResolveGh()
     }
 
-    static [string] ResolveGh() {
+    hidden [string] ResolveGh() {
         $cmd = Get-Command gh -ErrorAction SilentlyContinue
         if ($cmd) { return $cmd.Source }
         $paths = [System.Collections.Generic.List[string]]::new()
@@ -60,7 +64,7 @@ class GitHub {
             Write-Host '[=] no IaC changes'
             return
         }
-        & git -C $this.LocalPath commit -m $Message 2>&1 | Out-Null
+        & git -C $this.LocalPath commit -S -m $Message 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { throw '[!] git commit failed' }
         & git -C $this.LocalPath push origin HEAD 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { throw '[!] git push failed' }
@@ -131,8 +135,8 @@ class GitHub {
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBUVfq6TLNaWJV+
-# gDgOK0tjx2bUcSahsbUhwQMcxCwiQKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBtwz8v/PFIYuns
+# btZvvRigCljt0wNoBNuHhB6O6SYOxKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -153,18 +157,18 @@ class GitHub {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIAnvsZVG
-# 2Rx1HFe6F1RuXiUq5Y7RwLQVT6lfVDd3NtORMAsGCSqGSIb3DQEBAQSCAgAcmQJ2
-# ydKR4RTMPG36GGEEr2pHUQWoMp/in2VWBH8bLpYzFk+8J4kdkvL4HfbzIs+5nSMO
-# eqQGL5rGIVBhZrqfhbf8gYkoCUH6exmksxO3A2nGrX5lJ9sIdtxL/LwPkpZL0lT1
-# VNkpXHMQts0s/y3YULdvJhWjkMwClTAPjsiXcs3Ur3S5w8lSCzKxWYl4YQFlw9RM
-# 8wrt/beQ3TXS2fFnJD6vHbDVi7Nc8SXgphnRYJwXyyFh//1VklTMDsclXFfqH171
-# mEUr3sRNzFyGL9vmqfFJS290vggnlQk9uyGafifLl/4pg7y+hyANoCge6UKirrwF
-# d+15CeJIMDpDO7p57/JEZgJIDbKhxDYnTyaw4YHPVNKZouwBacoK7zOKDSPpqo7E
-# 77ZaLpibqypzTSGZVEKoiBxEMm6mLWp7CROnx4YaajsWvgO5YDszAf4uNLuYlG7C
-# fRQYxEC16DHa1CYwDzK5gYSE+eQC3xhvMklVJzT0XiEyibrwh5hxNqHLR6UiMa+s
-# SIlUSXidIljObcb5OsfeKvZujWeiNGTZ85iQzNny3DXmE6R1Xw/Jw1kRptVtIdJ0
-# f1XG3jm3yu4x5Fvagj0xdzz8YkQx7zlwJsDgdyRLonC0x3BU3wreG5KIEK9U8Exo
-# Z195eCOjtWa8PtvVOPlLXhsLErofBbq6MWdASqErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEINe7PpWZ
+# RBLkv0wpYd1rJEDZQ1US7BY3wMuf5uJXWKOoMAsGCSqGSIb3DQEBAQSCAgB6F3Lu
+# jio0I+lnsId/4NBQ+XxjmX9gy4jaM4fwDLA2mVluYrAeZB2E6VF2cvGuY6WGyGqp
+# 6Q9dOgtvNI+eCLEGhVNkU4KB9iYsDOEf7txQFmAIALhKLQzu48SyNmybcUOo3i9S
+# erNLN5dMEJs6H6ocVMkBrEeBax9j57BMSg123EjqGjLiPzdw6R3d/NjjPKoH/byi
+# /qJZCtog2NiTeIJtlk0KZ6Y18yxgzbvQ48IrhHQFVyPD0BiKN7LDP+dfBO9NyOD3
+# 4kosHKdeDXlggAG3h03MMtiHIDUbLCHjatk6A0ARGMR560HNqArt4tXW50uHM9Tr
+# VDBh+qVk1OjxZ40qIYlqZ8o0ENzjEJt/GhOeQqKpPstwCM7S22gwBROHgjaj9USp
+# vZGF1UmuKr4dsTN6DvxCvxi7k9XmQnk4pXL5oJT/O7HxCUkLHk+GJma7VdLwv3c8
+# LcZ9bXqiuJOkdr5cVzioHmZttI83Ec3PbgJ/GLu+zvCxybOecJB5xJmKxtXKHU9E
+# 0K2zkmpoM2efKzk7hoVwL0839X/Q/rWkm/EDiXYOgoil8sMUceUs9dmu5sczmoRL
+# Dfw447oIp94iwtqH9hvuuyXtucSTSeQ4jWkzFEvW6/yoo4Qv+FrGo5flVcRrdt/D
+# xom6bh3ktsItrb148CS5cVF1yhYbwJwzEv2LeqErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

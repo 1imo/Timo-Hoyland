@@ -6,3 +6,4 @@
 !.env.*.example
 settings.cfg
 !settings.cfg.example
+!.env.shared.example

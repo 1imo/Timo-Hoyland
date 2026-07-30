@@ -1,9 +1,61 @@
-
 SIGSTORE:
-- FULCIO_URL=
-- REKOR_URL=
-- CTLOG_URL=
-- TUF_MIRROR_URL=
-- OIDC_ISSUER=
-- OIDC_CLIENT_ID=
-- OIDC_REDIRECT_URL=
+  OIDC_REDIRECT_URL:
+
+GOOGLE:
+  OAUTH_REDIRECT_URL: http://localhost:8080
+
+ENDPOINTS:
+  CTLOG:
+    CLUSTER: ""
+    PUBLIC: ""
+  DB:
+    CLUSTER: ""
+    PUBLIC: ""
+  DEFECTDOJO:
+    CLUSTER: ""
+    PUBLIC: ""
+  FULCIO:
+    CLUSTER: ""
+    PUBLIC: ""
+  GITLAB:
+    CLUSTER: ""
+    PUBLIC: ""
+  GRAFANA:
+    CLUSTER: ""
+    PUBLIC: ""
+  GROWTHBOOK:
+    CLUSTER: ""
+    PUBLIC: ""
+  KEYCLOAK:
+    CLUSTER: ""
+    PUBLIC: ""
+  MATOMO:
+    CLUSTER: ""
+    PUBLIC: ""
+  OPENREPLAY:
+    CLUSTER: ""
+    PUBLIC: ""
+  OPENSEARCH:
+    CLUSTER: ""
+    PUBLIC: ""
+  OPENSEARCH_DASHBOARDS:
+    CLUSTER: ""
+    PUBLIC: ""
+  OTEL:
+    CLUSTER: ""
+    PUBLIC: ""
+  REDIS:
+    CLUSTER: ""
+    PUBLIC: ""
+  REKOR:
+    CLUSTER: ""
+    PUBLIC: ""
+  SONAR:
+    CLUSTER: ""
+    PUBLIC: ""
+  TUF:
+    CLUSTER: ""
+    PUBLIC: ""
+  VAULT:
+    CLUSTER: ""
+    PUBLIC: ""

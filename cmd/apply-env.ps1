@@ -3,78 +3,101 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/lib/Env.ps1"
 . "$PSScriptRoot/lib/Config.ps1"
+. "$PSScriptRoot/lib/OpenSearch.ps1"
+. "$PSScriptRoot/lib/PostgreSql.ps1"
 . "$PSScriptRoot/lib/Vault.ps1"
 . "$PSScriptRoot/lib/GitHub.ps1"
 . "$PSScriptRoot/lib/GitLab.ps1"
 . "$PSScriptRoot/lib/SourceControl.ps1"
 
-$envLoader = [Env]::new()
-$project = [Config]::new('project.cfg')
-$vault = [Vault]::new()
-$vault.Health()
+$Env = [Env]::new()
+$Project = [Config]::new('project.cfg')
+$os = $null
+try {
+    $Settings = [Config]::new('settings.cfg')
+    $Env.BindConfig($Settings, $Project)
+    [PostgreSql]::new($Env, $Settings, $Project) | Out-Null
+    $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd")
+    $os.Step('apply-env', 'started')
 
-$staging = $envLoader.VaultStaging()
-$secret = "$staging-$($project.Name)"
-$configSecret = "$staging-$($project.Name)-config"
-$data = $envLoader.ParseFile($envLoader.LoadedFile)
-$diffSecret = $vault.Compare($secret, $data)
+    $vault = [Vault]::new($Env)
+    $vault.Health()
 
-$config = [Config]::new('settings.cfg')
-$diffConfig = $vault.Compare($configSecret, $config.Data)
+    $staging = $vault.Staging()
+    $secret = "$staging-$($Project.Name)"
+    $configSecret = "$staging-$($Project.Name)-config"
+    $data = $Env.MergedData($Settings, $Project)
+    $diffSecret = $vault.Compare($secret, $data)
 
-$ciVars = @{
-    VAULT_URL           = $data['VAULT_URL']
-    VAULT_TOKEN         = $data['VAULT_TOKEN']
-    VAULT_SECRET_PREFIX = $staging
+    $diffConfig = $vault.Compare($configSecret, $Settings.Data)
+
+    $ciVars = @{
+        VAULT_URL           = $data['VAULT_URL']
+        VAULT_TOKEN         = $data['VAULT_TOKEN']
+        VAULT_SECRET_PREFIX = $staging
+    }
+    if (-not $ciVars.VAULT_URL) { throw '[!] VAULT_URL missing in env file' }
+    if (-not $ciVars.VAULT_TOKEN) { throw '[!] VAULT_TOKEN missing in env file' }
+
+    $remoteUrl = $Project.Require("remotes.$staging.url")
+    $ciLabel = if ($Env.Name -eq 'live') { "GitHub $remoteUrl" } else { "GitLab $remoteUrl" }
+
+    Write-Host ''
+    Write-Host "Vault @ $($vault.Addr)"
+    Write-Host "Project: $($Project.Name)"
+    Write-Host "[i] $staging : secret/$secret"
+    Write-Host "    source: .env.shared + $($Env.LoadedFile)"
+    Write-Host "    added=$($diffSecret.Added) changed=$($diffSecret.Changed) unchanged=$($diffSecret.Unchanged) removed=$($diffSecret.Removed)"
+    if ($Settings.Loaded) {
+        Write-Host "[i] config : secret/$configSecret"
+        Write-Host '    source: settings.cfg'
+        Write-Host "    keys=$($Settings.Data.Count) added=$($diffConfig.Added) changed=$($diffConfig.Changed) unchanged=$($diffConfig.Unchanged) removed=$($diffConfig.Removed)"
+    }
+    else {
+        Write-Host "[i] config : skipped (no settings.cfg)"
+    }
+    Write-Host "[i] CI → $ciLabel"
+    foreach ($key in $ciVars.Keys) {
+        Write-Host "    $key=$($ciVars[$key])"
+    }
+
+    if ((Read-Host 'Apply? [y/N]') -notmatch '^[yY]$') {
+        Write-Host '[=] skipped'
+        $os.Step('apply-env', 'skipped')
+        return
+    }
+
+    $vault.WriteSecret($secret, $data)
+    Write-Host "[+] secret/$secret updated"
+
+    if ($Settings.Loaded) {
+        $vault.WriteSecret($configSecret, $Settings.Data)
+        Write-Host "[+] secret/$configSecret updated ($($Settings.Data.Count) keys)"
+    }
+
+    $ci = [SourceControl]::new($Env, $Settings, $remoteUrl, [GitHub]::new(), [GitLab]::new($Env))
+    $ci.SetCiVars($ciVars)
+
+    Write-Host '[+] Done'
+    $os.Step('apply-env', 'succeeded')
 }
-if (-not $ciVars.VAULT_URL) { throw '[!] VAULT_URL missing in env file' }
-if (-not $ciVars.VAULT_TOKEN) { throw '[!] VAULT_TOKEN missing in env file' }
-
-$remoteUrl = $project.Require("remotes.$staging.url")
-$ciLabel = if ($env:ENV -eq 'live') { "GitHub $remoteUrl" } else { "GitLab $remoteUrl" }
-
-Write-Host ''
-Write-Host "Vault @ $($vault.Addr)"
-Write-Host "Project: $($project.Name)"
-Write-Host "[i] $staging : secret/$secret"
-Write-Host "    source: $($envLoader.LoadedFile)"
-Write-Host "    added=$($diffSecret.Added) changed=$($diffSecret.Changed) unchanged=$($diffSecret.Unchanged) removed=$($diffSecret.Removed)"
-if ($config.Loaded) {
-    Write-Host "[i] config : secret/$configSecret"
-    Write-Host '    source: settings.cfg'
-    Write-Host "    keys=$($config.Data.Count) added=$($diffConfig.Added) changed=$($diffConfig.Changed) unchanged=$($diffConfig.Unchanged) removed=$($diffConfig.Removed)"
+catch {
+    if ($_.Exception.Message -like '*UNSIGNED_SETTINGS_CFG*') {
+        if (-not $os) { $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd") }
+        if (-not $os.Url) { $os.Url = $Project.PinnedOpenSearchPublicUrl.TrimEnd('/') }
+        $os.Step('apply-env', 'failed', @{ event = 'unsigned_settings_cfg'; error = $_.Exception.Message })
+    }
+    elseif ($os) {
+        $os.Step('apply-env', 'failed', @{ error = $_.Exception.Message })
+    }
+    throw
 }
-else {
-    Write-Host "[i] config : skipped (no settings.cfg)"
-}
-Write-Host "[i] CI → $ciLabel"
-foreach ($key in $ciVars.Keys) {
-    Write-Host "    $key=$($ciVars[$key])"
-}
-
-if ((Read-Host 'Apply? [y/N]') -notmatch '^[yY]$') {
-    Write-Host '[=] skipped'
-    exit 0
-}
-
-$vault.WriteSecret($secret, $data)
-Write-Host "[+] secret/$secret updated"
-
-if ($config.Loaded) {
-    $vault.WriteSecret($configSecret, $config.Data)
-    Write-Host "[+] secret/$configSecret updated ($($config.Data.Count) keys)"
-}
-
-$ci = [SourceControl]::new($remoteUrl)
-$ci.SetCiVars($ciVars)
-
-Write-Host '[+] Done'
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCQSJ1+dcZ0vUE0
-# hrw3xaPBL4r1uke2qRQ7X0TDBQBD26CCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAZD3Xl2Z7AAuDD
+# y+39bRDkj/ZL9Q/Zdtfe3EWwscyHBKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -95,18 +118,18 @@ Write-Host '[+] Done'
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIKg0DC4A
-# Nzmon/PWsFVBuhMaBlf6T/7AJlPIFZI7x4SBMAsGCSqGSIb3DQEBAQSCAgAWgdIj
-# F+78IrdaEDDewObwqzpPMuFocQ2ecHqnV9BDRF7cCtIBEmP4p/1ELGrY/c3cAkaH
-# Ncou1veTID8EjeUQghq5nhFgWZr2bRkHuHvZ0WhfQIPWsE7vPtzikyDPjIrYdrCY
-# HHarkQ6+wt7akCI/DmUD1/2mVCF2iTNruY6cVW34/QRIYPZqW1yQBSVZFI51wdbW
-# gTd1JhoS+jrh0PbxWdLS/v+bSrv55I769PtlQTlQPZOKTpJs/YDtoaCj0LEGYlj1
-# 3WfPJ65hXtjPCbGxChSlSHEJurTMEjs68T6NpeQq6kEq6OWeTJl3gLokbwePl0Ze
-# pdnTZ0SN6Tpkf57P3ogOydto07tm67yiTKLKjsKc8k5xNj3NTzVqlKpDrqS0N0Bo
-# sco7Zm458nMiMFVS+f1yLzkP7AASO4WQ905AWyC3KZ/CqaeBBJuu35fD3VdGX9wg
-# MCK1Jn/ikCVMSp6B9+8/hIK63AKAMbNOUBp3FmwoN/kbpUtDTB/R3AcOUL01dCjY
-# Js2bwQrnK9B18DcnVry+S2nc9WdLoHCTb58PNf/alHnAzAXj7HFU8fNwAht36Qjd
-# bD285FnpK/Y2Qo0AM2Cng2nRsEkaAQsSljiJ3996phu/yjUKom2KN22rEvv41sqx
-# IKjYOUG4NhrzhJWPYc4h94RATX1XxVLWmP1xbqErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIFKPDM2P
+# LQf3t4oIMq52wOhk3HMPKjTRS93Rd3p3u/HKMAsGCSqGSIb3DQEBAQSCAgBmahag
+# AzS5LXFOUcGrrGTzpjF7TlHq8K0wjaROeR6nUbDDgxiOIgMDHI5/Nobgnew4Qrxf
+# xp1PLPzkAjNmvNsmglxDkGH9KgRGPfcF+weXuy2VEBejpUZa60CYeTSJlKWbWe8S
+# hFlQm6ROtJvYi/3WFhW5EmEQ3ABv6dK3BneI5uqK1yNBD19QwiEyT+tBKkqvynRc
+# Aw5IvbcWzGGKseFjBaHbB6v+O5on9GeQ3udgfSxzMpjqsk/TxzuD69zckCpkGPf0
+# o0AVwrLdPcYFUTwJdJEYdUEx/XIgbXIKmfMlvV+Bn3vUKls8rx1DMxvcf7jPM4Mw
+# SwjDIlwzqsUno+v1r2cGgt0jFlaINgxFwmO0a89ha/5oiuy+JxGVxN1oP44CynD4
+# 9OeJM8+SN45xfU9fEmhRumd3FyGpeQTeL5lHqCwz+0Z2cOINwxwxMHR1pOojXWHY
+# p1EZtjSjypNE49XA/4FKVuQn+Prxmf+gVl+ohGNeuWyi+4msDGXbeMhpvkxrz72X
+# WNmwDdzP5SHL5ByClsm1G+UxsX4o5utCr7wiwkQUG4RzWFlcdLYhOsg66bH+Cmxk
+# FS9yVG6aF8G0uyNqlAAeZMK+DH+akPcAxMglj/LmOIrhLXrKmEEl+8+QL4GayKZy
+# LR4USGX3VpnXP18ovrjFvV+ojMiOgWoYpKpC2aErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

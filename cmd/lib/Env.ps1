@@ -9,6 +9,17 @@ class Env {
         if ($top) { Set-Location (Resolve-Path $top).Path }
         else { Set-Location (Resolve-Path (Join-Path $script:CmdLibDir '../..')).Path }
 
+        # Idempotent: nested [Env]::new() in the same process must not re-parse .env* over process env.
+        if ($env:CMD_ENV_LOADED) {
+            $this.Name = $this.Current()
+            if ($env:ENV_FILE) { $this.LoadedFile = $env:ENV_FILE }
+            elseif ($env:ENV) { $this.LoadedFile = $this.FileForName($env:ENV) }
+            else { $this.LoadedFile = '.env.shared' }
+            return
+        }
+
+        $this.LoadShared()
+
         if ($env:ENV_FILE) {
             $path = if ([IO.Path]::IsPathRooted($env:ENV_FILE)) { $env:ENV_FILE } else { $env:ENV_FILE }
             $this.Load($path)
@@ -19,25 +30,59 @@ class Env {
         else {
             $this.Pick()
         }
-        if (-not $env:ENV) { throw '[!] ENV is required in env file' }
-        $this.Name = $env:ENV
+
+        $this.Name = $this.Current()
+        $env:CMD_ENV_LOADED = '1'
     }
 
-    hidden [string] FileForName([string]$Name) {
-        switch ($Name.ToLower()) {
-            'development' { return '.env.development' }
-            'test' { return '.env.test' }
-            'live' { return '.env.live' }
-        }
-        throw "[!] unknown ENV: $Name (expected development, test, live)"
+    [string] Current() {
+        if ($env:ENV) { return $env:ENV }
+        return 'shared'
     }
 
-    [string] VaultStaging() {
-        switch ($this.Name.ToLower()) {
-            'live' { return 'live' }
-            'test' { return 'test' }
+    [string] Get([string]$Key) {
+        if ([string]::IsNullOrWhiteSpace($Key)) { return '' }
+        $v = [Environment]::GetEnvironmentVariable($Key)
+        if ([string]::IsNullOrWhiteSpace($v)) { return '' }
+        return $v
+    }
+
+    [string] Require([string]$Key) {
+        $v = $this.Get($Key)
+        if ([string]::IsNullOrWhiteSpace($v)) { throw "[!] $Key is required" }
+        return $v
+    }
+
+    [void] BindConfig([object]$Settings, [object]$Project) {
+        $this.EnsureNetwork()
+        if ($Settings -and $Settings.Loaded) {
+            $Settings.ApplyEndpoints($env:NETWORK)
         }
-        throw "[!] apply-env only pushes test/live env files (selected ENV=$($this.Name))"
+    }
+
+    [void] EnsureNetwork() {
+        if ($env:NETWORK) {
+            $n = "$($env:NETWORK)".ToLower()
+            if ($n -notin @('cluster', 'public')) {
+                throw "[!] NETWORK must be cluster or public (got $($env:NETWORK))"
+            }
+            $env:NETWORK = $n
+            return
+        }
+        $this.PickNetwork()
+    }
+
+    [void] PickNetwork() {
+        Write-Host ''
+        Write-Host 'Network:'
+        Write-Host '  1) cluster'
+        Write-Host '  2) public'
+        $choice = Read-Host 'Choose [1-2]'
+        switch ($choice) {
+            '1' { $env:NETWORK = 'cluster' }
+            '2' { $env:NETWORK = 'public' }
+            default { throw "[!] invalid network choice: $choice" }
+        }
     }
 
     [hashtable] ParseFile([string]$File) {
@@ -53,6 +98,25 @@ class Env {
                 $data[$key] = $val
             }
         }
+        return $data
+    }
+
+    [hashtable] MergedData([object]$Settings, [object]$Project) {
+        $data = @{}
+        if (Test-Path '.env.shared') {
+            foreach ($e in $this.ParseFile('.env.shared').GetEnumerator()) { $data[$e.Key] = $e.Value }
+        }
+        if ($this.LoadedFile -and (Test-Path $this.LoadedFile) -and $this.LoadedFile -ne '.env.shared') {
+            foreach ($e in $this.ParseFile($this.LoadedFile).GetEnumerator()) { $data[$e.Key] = $e.Value }
+        }
+        if ($Settings -and $Settings.Loaded) {
+            $network = if ($env:NETWORK) { $env:NETWORK } else { 'public' }
+            foreach ($e in $Settings.EndpointEnvVars($network).GetEnumerator()) {
+                $data[$e.Key] = $e.Value
+            }
+        }
+        if ($env:NETWORK) { $data['NETWORK'] = $env:NETWORK }
+        if ($env:DB_URL) { $data['DB_URL'] = $env:DB_URL }
         return $data
     }
 
@@ -81,17 +145,39 @@ class Env {
         }
         $choice = Read-Host "Choose [1-$($candidates.Count)]"
         if (-not $choice) { throw '[!] choice required' }
-        $idx = [int]$choice - 1
+        $idx = 0
+        if (-not [int]::TryParse($choice, [ref]$idx)) { throw "[!] invalid choice: $choice" }
+        $idx = $idx - 1
         if ($idx -lt 0 -or $idx -ge $candidates.Count) { throw "[!] invalid choice: $choice" }
         $this.Load($candidates[$idx].Path)
+        if (-not $env:ENV) { throw '[!] ENV is required in env file' }
+        $this.Name = $env:ENV
+        $this.EnsureNetwork()
+    }
+
+    hidden [void] LoadShared() {
+        if (-not (Test-Path '.env.shared')) { return }
+        $data = $this.ParseFile('.env.shared')
+        foreach ($key in $data.Keys) {
+            Set-Item -Path "env:$key" -Value $data[$key]
+        }
+    }
+
+    hidden [string] FileForName([string]$Name) {
+        switch ($Name.ToLower()) {
+            'development' { return '.env.development' }
+            'test' { return '.env.test' }
+            'live' { return '.env.live' }
+        }
+        throw "[!] unknown ENV: $Name (expected development, test, live)"
     }
 }
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBQeJurAvV5p008
-# 4S3cwmLY7p5EIjOqvSLhqLFgqkP1yqCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDsvnvt1Iz/oNJa
+# sKpWv9q0MsAFLR6TwCZtdTZ0ShkV5qCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -112,18 +198,18 @@ class Env {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIJK+Yyj9
-# gf75/I3E8cbcACQV7KotOsEqBAUwGLprDa+mMAsGCSqGSIb3DQEBAQSCAgArRC53
-# iGuENjmQq8saDhUrhGg5GT9SAdLVKKnREsHdJWzZFtbi6TuFuRp9WrwHtwFX5n5v
-# 3Pa7qFstiBHSOkjF+wdw5anx5Uh2GHfzLPDJQWmjqBOo3ZyTOLgLnyJrIOYJUBWi
-# Fq9Zi7qKnrUGrQ68sn5E9VWCzVF2xkVGx918xADWZBnnT9e/HXbriYI6sOM1icEQ
-# X9faVP72EP85os49yRbbMds6fT+IbYHSe/ZefuWKWFs/w4y2tdddala7K8MO8FGS
-# 5lvkRszlBrPjTvWZl2Yk1aiWY9soGtY9s14ycolHNCkfjId/LZFTt7mFp8fQibhd
-# rPqZldNm/U//Wj1cXShv7+oBkN1OFPWgnZS/0pyLJruYzBekCfdYatqU9OHkE+vs
-# e1z6gbjzjp2qkhhM0PpurCe3I6Lb8EDOhAt2NkdpEzqhh0Lsm9LDKTZYeb4C39a3
-# Kby6reHbnyBUBGY0P5B9IwVgTFeEJXL4cGUOi1wxOLI3at/rOJZrMC2Ib56bxqxR
-# fcs7JxMsIbr8iY/GyfsYBcZCgx14+pa290K0/XgDWOl5vBCBKFvs1YW2jHbIiqiL
-# C2AiVYxET/OIvWz+cTLnGYvNSW+8fAwMDe+OgfpsxeYoTtHqf6jvWtt429pV8f2K
-# D5R/lEmF1xu1wBSZSEMvgXaUCGlY/KMEbQ3cW6ErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIOjCpnR1
+# I8r4xFK5NmreSWbYJVMtUqmnS/pxFjNWoIhqMAsGCSqGSIb3DQEBAQSCAgBUkZNI
+# 2KBdIlcYMy2efSQdq+bzAgvfIZE+4hOjMoD0zeHGo6pXSyPj9gpLvdQZ2D4Eajjs
+# gfPh9dOLtZCq2HGO7ALa/kTFG1kguJy056bhpkReQukLOSHYCMJx5BvdA9DM+fQu
+# iBhK2xm2jBz9mkaGywrRVDaHTo9S1Fn1yeVwyd67m8ZmSftfglFm0c4WexANs9Qv
+# V79M2j8QOfSUZze9tMEXeL4xFRMRtqz5KiOkHRUEeF5U0n3NN6H/dPbFEGHyYXrW
+# CUtxWVZh7dCoBP+Mcechivy/jpIxuW79+XS8rUL//jmHQKzGfQEMEoS+EsuedRvu
+# uVp7VXPx8pzI9SPX31XbwhC3x9aJ0Xy3emsJlngKpLBlROR8JeayKVDNX1t+4Bx+
+# 4cd4hcqnDCu503xNwgTJVe5oQTdUbQIwiV5VJY2AaPb8W5gm7hUycLq049pKMCwM
+# Cm2BNTmBdN/6rjJ7RR6D7M3SaIlwIMLdEHSW7Xgw87ud69d2EXHBUB6OOXHg3f6j
+# 5LGJDMiUqR+7Lr1hQUZ8LiafnVrjUSrITAcLgnPKA7iRT10KH75U/5Qo92BJgpMG
+# AuqREZyBbkneUnX77FbcxbBZDKqnJubuVkQVtUchFc3XQu0jaQlyQFURDUFJ13IM
+# R+Vnd9Z2+isfSrhaxPDZXJZkUuCcM4Cw9i+lh6ErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

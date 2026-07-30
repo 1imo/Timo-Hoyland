@@ -1,24 +1,49 @@
 class PostgreSql {
     [string]$DbUrl
+    [Env]$Env
 
-    PostgreSql() {
-        if (-not $env:DB_URL_PUBLIC) { throw '[!] DB_URL_PUBLIC is required' }
-        $this.DbUrl = $env:DB_URL_PUBLIC
+    PostgreSql([Env]$Env, [object]$Settings, [object]$Project) {
+        if (-not $Env) { throw '[!] PostgreSql requires Env' }
+        $this.Env = $Env
+        $this.Apply($Settings, $Project)
+        $this.DbUrl = $this.Env.Require('DB_URL')
     }
 
-    hidden [string] DbNameFromUrl([string]$Url) {
-        if ($Url -match 'postgresql://[^/]+/([^?]+)') { return $Matches[1] }
-        throw '[!] cannot parse database name from DB_URL_PUBLIC'
+    [void] Apply([object]$Settings, [object]$Project) {
+        if (-not $this.Env) { throw '[!] PostgreSql.Apply requires Env' }
+        if (-not $Settings -or -not $Settings.Loaded) { return }
+        $network = if ($env:NETWORK) { $env:NETWORK } else { 'public' }
+        $endpoint = $Settings.Endpoint('DB', $network)
+        $user = $this.Env.Get('DB_USER')
+        $pass = $this.Env.Get('DB_PASSWORD')
+        if ([string]::IsNullOrWhiteSpace($user) -or [string]::IsNullOrWhiteSpace($pass)) { return }
+        if (-not $Project -or [string]::IsNullOrWhiteSpace([string]$Project.Name)) {
+            throw '[!] PostgreSql requires project name for database'
+        }
+        if ([string]::IsNullOrWhiteSpace($this.Env.Name) -or $this.Env.Name -eq 'shared') {
+            throw '[!] PostgreSql requires ENV (development, test, or live)'
+        }
+        $dbName = "$($Project.Name)-$($this.Env.Name)"
+        $env:DB_URL = $this.BuildUrl([string]$endpoint, $user, $pass, $dbName)
     }
 
-    hidden [string] AdminUrl([string]$Url) {
-        $db = $this.DbNameFromUrl($Url)
-        return $Url -replace "/$([regex]::Escape($db)).*$", '/postgres'
-    }
-
-    hidden [bool] Exists([string]$DbUrl, [string]$DbName) {
-        $out = & psql $DbUrl -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'" 2>$null
-        return ($out -match '1')
+    [string] BuildUrl([string]$Endpoint, [string]$User, [string]$Password, [string]$DbName) {
+        if ($Endpoint -notmatch '^(postgresql://)([^/?]+)(.*)$') {
+            throw "[!] invalid DB endpoint (expected postgresql://host[:port]): $Endpoint"
+        }
+        $scheme = $Matches[1]
+        $hostPart = $Matches[2]
+        $rest = $Matches[3]
+        if ($rest -match '^/') {
+            throw "[!] DB endpoint must be host-only (no database path): $Endpoint"
+        }
+        $u = [Uri]::EscapeDataString($User)
+        $p = [Uri]::EscapeDataString($Password)
+        $url = "${scheme}${u}:${p}@${hostPart}${rest}"
+        if (-not [string]::IsNullOrWhiteSpace($DbName)) {
+            $url = "$($url.TrimEnd('/'))/$DbName"
+        }
+        return $url
     }
 
     [void] EnsureDatabase() {
@@ -37,13 +62,28 @@ class PostgreSql {
         & psql $this.DbUrl -v ON_ERROR_STOP=1 -f $SqlFile
         if ($LASTEXITCODE -ne 0) { throw "[!] psql failed: $SqlFile" }
     }
+
+    hidden [string] DbNameFromUrl([string]$Url) {
+        if ($Url -match 'postgresql://[^/]+/([^?]+)') { return $Matches[1] }
+        throw '[!] cannot parse database name from DB_URL'
+    }
+
+    hidden [string] AdminUrl([string]$Url) {
+        $db = $this.DbNameFromUrl($Url)
+        return $Url -replace "/$([regex]::Escape($db)).*$", '/postgres'
+    }
+
+    hidden [bool] Exists([string]$DbUrl, [string]$DbName) {
+        $out = & psql $DbUrl -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'" 2>$null
+        return ($out -match '1')
+    }
 }
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBSC3CavDooztTD
-# Eh5H1yI8GOmZJTrew4oRjjx59e9AGaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCA/GxmFgdJEmunj
+# WS5ppQAAfRS6sogmDT10OTsZ6th1wKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -64,18 +104,18 @@ class PostgreSql {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIDuVscn8
-# IpFxctCoXSCMA2y6oaPJ1dKAJfCFnnO46zIOMAsGCSqGSIb3DQEBAQSCAgA0II99
-# GTGo3g5SnCT6oVa1uKkb8hNPWKAC/udfUeEPrrTc3TL0p5nGjZ2RcazbTb4Fur+4
-# L9F+WIhmvqjFFFE+a2vwMNSWp+fhAXslIggTtTo66LEhPL6J72TzRC7W5cuMdZYX
-# GUjwX2qd7y1f9YOlz0ApMneH7ADlEaPF1vqyNtjOXvnKzLV1/i/OQJX1iF1AZ0js
-# jSeGG2G0kJ/m2wn/kzrbuqdCPd2xKq4BAik2LgcT5W+SWWTzSKvn3Q0p5eVXrFAL
-# htbpcWnUKrn4fEaLPMC0T6Ay1cbolb/KStq7zNuHElamZM/51lcd7sz+k6Q/pO6K
-# wXoFMhUfdnDLBpzpTuyviKWe5dyc1b8AwQtGNpZQoU0KVT09jFLrfJjLSGEB+u0A
-# DdlicKWiwlWmAWh4YNQEshXxtBlr3YtCglK6/ZtCoyA29HjAsVd7AJHnmushvYxJ
-# psGIwXTgnDPXtYEf0KVK6RUYnU2IHelXQsR72LpoEmY7OWVnHQhHf52bUFPd990c
-# kYYzslrt9HypwLTg6uXTFSgpiquFe2cbZWgvppi8SMjUA0tj4sTf+GLUR1v3wwvF
-# lU9kISTb+KQJNPsp3Yb4lmS28q0tAry0a+8v0Twlinb8vTt91CguNq7596TwBOxp
-# r4XQ4zIOA5qgfoxwVJcnJ2p1Y+31xqSMv8Yg1aErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIBoPXl8p
+# ItsmIAI2w9CCftG25tcOQ8pWyzytQ+Ef76cFMAsGCSqGSIb3DQEBAQSCAgBYCiUn
+# oo2GZFMJmPCM+5y3JihlcFCk86ILMi0mLHiwmkpo7YlN+aifYIZcREf24RcgLQz/
+# w6ZDtJiWE9Jr0UKkgoNSUIESBt84bK4fRgw6qS2NKcsk09us4mh7L96hCXEyyM9B
+# CxMvg8NFQfTcFotgQ+i6h0K5hzFJVul4RZra9V4r/pbQtx75+OmLtzVj+IQtwk9q
+# eRMLAnnsIqh8mwkoqQGF09O3Iu1B4gimPP5sVFeOvNYDpi0Ar0AxcNvxuQv9+/Wz
+# umr2aFKv+WIzwoLphWH/xIZnUT24+sd+n96sUtAFNEO/RCXP9PhNY7lfFfxwnx7p
+# 7H7Jul8qpa3xSFZlDJhRD9VGTQpqYG4xj9wwGQp2cx82ceC+Pmw6dkKH/zBC4H11
+# zodBW9Ga+O2Rda+e1x6AWlGRwykXFFuPlOpSaVlnowis+RsEuGkkyK86AXuFtlCt
+# Ybjwd/5tS8FuodbF9kMOVxOvo1I6CRS7DeoPqwXmV+6EjfF5Koo+MI44RD744qRA
+# ZCdFZ0VKZxVHoP2cgXQbLm04cyIXujRtU5ba2Ua1WDxWr4X7kARFkI7K6pw8SKZS
+# XfDh6IYYkZek+H/APwbILsMcxYu6LgII4thUg0bnuXIz5hi0OC8OUkSjModLWxN6
+# zKUrKoq3z7yXd4XY4oioCeCh4AjsiDr6WzA1X6ErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

@@ -7,18 +7,15 @@ dashboards/
   grafana/
     metrics.json
     synthetic-monitoring.json
-  kibana/
+  opensearch/
     logging.ndjson
-  posthog/
-    analytics.json
 ```
 
 Applied via `./cmd/apply-dashboards.ps1`.
 
-Each dashboard is scoped to the project from `project.yml`:
+Each dashboard is scoped to the project from `project.cfg`:
 
 | Platform | Naming |
 |----------|--------|
 | Grafana | folder `{project}/{slug}`, dashboard `{project} / {slug} ({ENV})` |
-| Kibana | title `{project} / {slug}` |
-| PostHog | name `{project} / {slug}` |
+| OpenSearch Dashboards | title `{project} / {slug}` |

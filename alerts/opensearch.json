@@ -1,0 +1,57 @@
+[
+  {
+    "id": "unsigned-settings-cfg",
+    "type": "monitor",
+    "name": "__PROJECT__ unsigned settings.cfg (__ENV__)",
+    "monitor_type": "query_level_monitor",
+    "enabled": true,
+    "schedule": {
+      "period": {
+        "interval": 1,
+        "unit": "MINUTES"
+      }
+    },
+    "inputs": [
+      {
+        "search": {
+          "indices": ["__PROJECT__-cmd*"],
+          "query": {
+            "size": 0,
+            "query": {
+              "bool": {
+                "filter": [
+                  {
+                    "query_string": {
+                      "query": "event:unsigned_settings_cfg AND deployment.environment:\"__ENV__\""
+                    }
+                  },
+                  {
+                    "range": {
+                      "@timestamp": {
+                        "gte": "{{period_end}}||-5m",
+                        "lte": "{{period_end}}"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "name": "unsigned-settings-seen",
+        "severity": "1",
+        "condition": {
+          "script": {
+            "source": "ctx.results[0].hits.total.value > 0",
+            "lang": "painless"
+          }
+        },
+        "actions": []
+      }
+    ]
+  }
+]

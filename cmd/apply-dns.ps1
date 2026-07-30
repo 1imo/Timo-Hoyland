@@ -3,39 +3,37 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/lib/Env.ps1"
 . "$PSScriptRoot/lib/Config.ps1"
+. "$PSScriptRoot/lib/OpenSearch.ps1"
 . "$PSScriptRoot/lib/Spaceship.ps1"
 
-[void][Env]::new()
-
-$project = [Config]::new('project.cfg')
-$registry = $project.Require('public.dns.registry')
-$domain = $project.Require('public.domain')
-$pubHost = $project.Require('public.host')
-$names = @($project.Get('public.dns.A'))
-if (-not $names -or $names.Count -eq 0) { throw '[!] public.dns.A required in project.cfg' }
-
-if ($registry.ToUpper() -ne 'SPACESHIP') {
-    throw "[!] public.dns.registry must be SPACESHIP (got $registry)"
+$Env = [Env]::new()
+$Project = [Config]::new('project.cfg')
+$os = $null
+try {
+    $Settings = [Config]::new('settings.cfg')
+    $Env.BindConfig($Settings, $Project)
+    $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd")
+    $os.Step('apply-dns', 'started')
+    [Spaceship]::new($Env, $Project).Apply()
+    $os.Step('apply-dns', 'succeeded')
 }
-
-$items = foreach ($name in $names) {
-    [ordered]@{
-        type    = 'A'
-        name    = $name
-        address = $pubHost
-        ttl     = 3600
+catch {
+    if ($_.Exception.Message -like '*UNSIGNED_SETTINGS_CFG*') {
+        if (-not $os) { $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd") }
+        if (-not $os.Url) { $os.Url = $Project.PinnedOpenSearchPublicUrl.TrimEnd('/') }
+        $os.Step('apply-dns', 'failed', @{ event = 'unsigned_settings_cfg'; error = $_.Exception.Message })
     }
+    elseif ($os) {
+        $os.Step('apply-dns', 'failed', @{ error = $_.Exception.Message })
+    }
+    throw
 }
-
-Write-Host "[+] Applying DNS ($domain, registry=$registry)"
-[Spaceship]::new().SaveRecords($domain, $items)
-Write-Host '[+] Done — DNS'
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCvrlMWOLZMuf/9
-# QSE00jZAJD/gYWlnb3x6gWHEHiqq5KCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDTwii/UHj4klIo
+# IGY8jggn3W+UkfDB6ipKYhXOzyv+CaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -56,18 +54,18 @@ Write-Host '[+] Done — DNS'
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIKkTVrnE
-# IWV+NZN42/1UEOHytkjRqe15G8YPJFJQHktYMAsGCSqGSIb3DQEBAQSCAgAS+Y2X
-# cvQWpuYuspXvlB+/jCIc6tpzbz+a4NZStXcxjz+HlKQaRfQ+z0hq5CNuR5vmleZP
-# wK/FSMJcS6wR2N9vqeQXOifW3ld9AVs+LzoSoMZ85qXv/28WrIgKiCCTTZWIMYT4
-# 3eaPPe8qlCSz0m6xP6uy31UszR+NLys6Ef8DoI6vpnKbLmIV40g/B4koZrF0MM/Q
-# yexQAhjCl6wTn+HyS3hw2PQKjLqIEDxwZoK24c2s9EutRARaJKsbcWOtV5ykH3d1
-# bPYeoKVlkFLte+rr0Xuh55B9lbOOihDg7UWcAA31NwJk9Lj4B1Q2mLsFquCynxs5
-# fi0b3o91yAN/52z47/8LRS67NRQ1DAX/NQEI5ZNheciHeq71Pi4K0qyOpfUwo8+e
-# ASNww6CJ/P8JmGoJqoVv2K/gor94oeamb1Uk0qPTkVxst0pREhjtqAkbIXKOdfDG
-# +RQugc78cFcP3dFaO9mLeNdRuFpobfO19WX+OaLKpiSN7KlNV3UM1evdp3oz2MAC
-# ou6MtL//SnCIRPHpXOI2nupPFdVW+dW7ea1Bj+P3T0wfxpKVYvTVyQGyrfaJLCae
-# a1MADfIiXYqxxW3jUzx9al5Rq5mHExGVPqlumD6xtfuagShEzY1gV2kEThKA6UWj
-# 3gLh1iSv3hfBq/OoL3TV+nnosuNrhAgNqPj01qErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIKy3Rj1d
+# pIJkQLwX5N6u7gHRrkOC/8BodyVyNTr+jQ+6MAsGCSqGSIb3DQEBAQSCAgAHU+fA
+# 3JIO+AMocwMxTEHmNFWbjNMhTpbh2jNqKBOtdquMbHqOw8Pc2PaPFJib2eV3QHqW
+# NOnnrsu3R6e8dHo23sqW5KOL/W4UMNSX9LxikD02FydMwhex3QbCkAHOwevyYh8a
+# 8QYTJCWK16NElrg/8voL4ByuBCmeRJvLfJ3RIRuPcAO0U5cOLpAo5t38co0M9DJN
+# oMmOSSJNF08vLoOYTH/Lp89DdYLvDkBiZi2lDxcLzHokq1nLImyhj0oZM1MjBp/g
+# ohQmxC3c611FjwaYQJ1EromNGapihJqxJ+UGsDEBgQ8Iuw+S2nDyqt6fl98DAX3/
+# jwbNDrXebeR3pHmp2NpFuKDkCapdjaUvmg52M6R+sIJ6ng7bR0X4oZK7BhS07Ko6
+# oAqVuapEDV4n378nWSn9letCmMGulGQ1ysN2bHrAiPxydSvstiSGjzzBMcZCASFE
+# V8xvcpaCl6gxO8qnsqv0t+Z/oyuoKBBk6pidS8bKk0ON0p9P44qAwclVqtYUUyhk
+# 7rd/FHrI2c0zP/0ktLzF4NgGe2KiYL7DV2YPFzgcke7jMInKqKwtxp9sJJ217QlL
+# XFw3Wn/LW6m7JmkyKdiFVTWamuHj+21TphPmFjx4axhKmkn0P7+bhXvoTHbkpGyo
+# 9ibv8DuzmFf2UNaVuftEqQgcdOmenytxPEolN6ErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

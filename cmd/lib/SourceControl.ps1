@@ -1,16 +1,23 @@
 class SourceControl {
     hidden [object]$Backend
     hidden [string]$WorkDir
-    [string]$Env
+    [string]$Channel
     [string]$Root
+    [Env]$Env
+    [Config]$Settings
 
-    SourceControl([string]$RemoteUrl) {
-        if (-not $env:ENV) { throw '[!] ENV required' }
-        $this.Env = switch ($env:ENV.ToLower()) {
+    SourceControl([Env]$Env, [Config]$Settings, [string]$RemoteUrl, [GitHub]$GitHub, [GitLab]$GitLab) {
+        if (-not $Env) { throw '[!] SourceControl requires Env' }
+        if (-not $Settings -or -not $Settings.Loaded) { throw '[!] SourceControl requires settings.cfg' }
+        if (-not $GitHub) { throw '[!] SourceControl requires GitHub' }
+        if (-not $GitLab) { throw '[!] SourceControl requires GitLab' }
+        $this.Env = $Env
+        $this.Settings = $Settings
+        $this.Channel = switch ($Env.Name.ToLower()) {
             { $_ -in @('dev', 'development') } { 'test' }
             'live' { 'live' }
             'test' { 'test' }
-            default { throw "[!] env must be live or test (got $env:ENV)" }
+            default { throw "[!] env must be live or test (got $($Env.Name))" }
         }
 
         if ([string]::IsNullOrWhiteSpace($RemoteUrl)) { throw '[!] remote url required' }
@@ -26,13 +33,18 @@ class SourceControl {
         }
 
         $repo = $this.RepoPath($RemoteUrl)
-        if ($this.Env -eq 'live') {
-            $this.Backend = New-Object GitHub $RemoteUrl, $localPath
+        if ($this.Channel -eq 'live') {
+            $GitHub.Remote = $RemoteUrl
+            $GitHub.LocalPath = $localPath
+            $GitHub.Repo = $repo
+            $this.Backend = $GitHub
         }
         else {
-            $this.Backend = New-Object GitLab $RemoteUrl, $localPath
+            $GitLab.Remote = $RemoteUrl
+            $GitLab.LocalPath = $localPath
+            $GitLab.Repo = $repo
+            $this.Backend = $GitLab
         }
-        $this.Backend.Repo = $repo
     }
 
     hidden [string] RepoPath([string]$Url) {
@@ -69,7 +81,103 @@ class SourceControl {
         $this.Backend.WriteContent($RelativePath, $Content)
     }
 
-    [void] CommitAndPush([string]$Message) { $this.Backend.CommitAndPush($Message) }
+    hidden [void] ConfigureGitsign([string]$RepoPath) {
+        if (-not (Get-Command gitsign -ErrorAction SilentlyContinue)) {
+            throw '[!] gitsign required (https://github.com/sigstore/gitsign)'
+        }
+        & git -C $RepoPath config gpg.x509.program gitsign
+        & git -C $RepoPath config gpg.format x509
+        & git -C $RepoPath config commit.gpgsign true
+        & git -C $RepoPath config gitsign.fulcio $this.Settings.Endpoint('FULCIO')
+        & git -C $RepoPath config gitsign.rekor $this.Settings.Endpoint('REKOR')
+        & git -C $RepoPath config gitsign.issuer $this.Settings.Endpoint('KEYCLOAK')
+        & git -C $RepoPath config gitsign.clientID $this.Env.Require('OIDC_CLIENT_ID')
+        & git -C $RepoPath config gitsign.redirectURL $this.Settings.Require('SIGSTORE.OIDC_REDIRECT_URL')
+        & git -C $RepoPath config gitsign.autoclose false
+        $env:GITSIGN_LOG = Join-Path ([IO.Path]::GetTempPath()) 'gitsign.log'
+        Write-Host "[+] gitsign configured (log=$env:GITSIGN_LOG)"
+    }
+
+    [string] PromptCommitMessage() {
+        $types = @(
+            @{ Name = 'feat';     Hint = 'new feature' }
+            @{ Name = 'fix';      Hint = 'bug fix' }
+            @{ Name = 'docs';     Hint = 'documentation only' }
+            @{ Name = 'style';    Hint = 'formatting / whitespace (no logic change)' }
+            @{ Name = 'refactor'; Hint = 'code change that is not feat or fix' }
+            @{ Name = 'perf';     Hint = 'performance improvement' }
+            @{ Name = 'test';     Hint = 'add or fix tests' }
+            @{ Name = 'build';    Hint = 'build system or dependencies' }
+            @{ Name = 'ci';       Hint = 'CI configuration' }
+            @{ Name = 'chore';    Hint = 'maintenance / misc' }
+            @{ Name = 'revert';   Hint = 'revert a previous commit' }
+        )
+
+        Write-Host ''
+        Write-Host 'Conventional commit type:'
+        for ($i = 0; $i -lt $types.Count; $i++) {
+            Write-Host ("  {0}) {1,-9} {2}" -f ($i + 1), $types[$i].Name, $types[$i].Hint)
+        }
+        $choice = Read-Host "Choose [1-$($types.Count)]"
+        if (-not $choice) { throw '[!] commit type required' }
+        $idx = 0
+        if (-not [int]::TryParse($choice, [ref]$idx)) { throw "[!] invalid choice: $choice" }
+        $idx = $idx - 1
+        if ($idx -lt 0 -or $idx -ge $types.Count) { throw "[!] choice out of range: $choice" }
+        $type = [string]$types[$idx].Name
+
+        $scope = (Read-Host 'Scope (optional)').Trim()
+        $desc = (Read-Host 'Short description').Trim()
+        if ([string]::IsNullOrWhiteSpace($desc)) { throw '[!] commit description required' }
+        $desc = $desc.TrimEnd('.')
+
+        $breaking = $false
+        if ((Read-Host 'Breaking change? [y/N]') -match '^[yY]$') { $breaking = $true }
+
+        $body = (Read-Host 'Body (optional)').Trim()
+        $footer = ''
+        if ($breaking) {
+            $footer = (Read-Host 'BREAKING CHANGE description').Trim()
+            if ([string]::IsNullOrWhiteSpace($footer)) { throw '[!] BREAKING CHANGE description required' }
+        }
+
+        $bang = if ($breaking) { '!' } else { '' }
+        $scopePart = if ($scope) { "($scope)" } else { '' }
+        $header = "${type}${scopePart}${bang}: $desc"
+
+        $parts = [System.Collections.Generic.List[string]]::new()
+        $parts.Add($header)
+        if ($body) {
+            $parts.Add('')
+            $parts.Add($body)
+        }
+        if ($footer) {
+            $parts.Add('')
+            $parts.Add("BREAKING CHANGE: $footer")
+        }
+        $msg = ($parts -join "`n").Trim()
+        Write-Host ''
+        Write-Host "[+] commit message:"
+        Write-Host $msg
+        return $msg
+    }
+
+    [void] Commit([string]$Message) {
+        $this.ConfigureGitsign($this.Root)
+        if (git -C $this.Root status --porcelain) {
+            & git -C $this.Root add -A
+            & git -C $this.Root commit -S -m $Message
+            if ($LASTEXITCODE -ne 0) { throw '[!] git commit failed' }
+        }
+        else {
+            Write-Host '[i] Working tree clean — pushing existing commits only'
+        }
+    }
+
+    [void] CommitAndPush([string]$Message) {
+        $this.ConfigureGitsign($this.Backend.LocalPath)
+        $this.Backend.CommitAndPush($Message)
+    }
 
     [string] CreateBranch([string]$Name, [string]$RemoteName) {
         return $this.Backend.CreateBranch($Name, $RemoteName)
@@ -116,7 +224,7 @@ class SourceControl {
     }
 
     [void] SetCiVars([hashtable]$Vars) {
-        if ($this.Env -eq 'live') {
+        if ($this.Channel -eq 'live') {
             foreach ($key in $Vars.Keys) {
                 $val = [string]$Vars[$key]
                 if ($key -match 'TOKEN|SECRET') {
@@ -138,8 +246,8 @@ class SourceControl {
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAEk/17EOaOwwBg
-# 1lBhJs8KAN7aKXrfBgtrWgACUQF5VaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAHeBH0LrMlGw8m
+# UjmolGaj86hmSyLiEODGmfZdYlMljqCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -160,18 +268,18 @@ class SourceControl {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIGHcl7RG
-# Jw6sihzGOaiZRFgLIX3yeKcwgFmselNKs3M8MAsGCSqGSIb3DQEBAQSCAgABTnLo
-# wBGybVhJJfKPTPjRvKE0OCWJudK3g9lG1SnE34DI45KvBiVX2hFjZBtckK9O3Yrp
-# sc5WjzS5U4HQxa1dBg6GqkHwBNI3rChFf7dLiwAp38F2uGQz4saJnqdzBa0l7Yai
-# HiRHGQvX1OD/v8xiEYnwrk0tIMSG900xCdaM0CE/PLxV5W7iE8s5cjSRX7DfN+8T
-# EZoq8nLuHriV5FYtscRBYap+3hCa0ug6XFSVBaC9sLcCz8rfZeAUtUwDVqU/8cRK
-# z6HkgyYbd8ot6n1ZJUya+laO9f3dvp3CyAZYsAIwNmhGQXL+8o55SblujhLk9w7r
-# miBtgM1s+fy7BAiIHzlU8h99letwcjTGFOeLBuC7EYTNN5N7FyWRv13Abg3xgNUE
-# KLqCNp9Hn+z6HAINCloNG8UWffRgsKT4jtuApntPm14G/ljBY3UHaVVJAOlpHqr0
-# vbipWp+gG7dlAl3kjUAdTiPSLbmZKGT3pGLf1hrBtfXxOMOfJEkPvPzgCL/TFTk+
-# 38AvDTVwo7itE0EVjr8D3GsT3wxAT9A7ME7xMc/a8+nUagT++2m+4HVfF7xEZJjO
-# K2Uj6Mh+DduQo2SMrXtinjl324Gmp+tLdXWjtBu+Ba6lvP/80rrhXFhamXxE627e
-# 4yB1z+9GcI8CKHyeZvTXN7ubuIe+RLBD92mng6ErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIIXOrvaA
+# IX0gsJXSAznrlG1O3yH0JjSfV9eHb8slrxNUMAsGCSqGSIb3DQEBAQSCAgAwTUt8
+# Uzjksq/0Ajw6S4ScR4fVn22iBEtsqL1YgmbGOEZmUCT2P8gIgztskQGkyNTIPsoV
+# GGZncJA4tpNO5YYEIK1MQjZsGtr1mqU4Pdon3lyjRf3/X1wnRrJ0eTi1UVL3ONGp
+# i+q4En1ElJmU8up0mdvAYWZICUQr9qyIkNM/NIRQmSWoac4lTgBYTyBLeo4DaKYf
+# hwBUF3cCUIu1xUAf2Bdv5A8FcS9kkAkEqlakqVsKvZyqi1vhf8As430+6vKn1JDg
+# hx2kFYAlaxF3G/8W6F6fSux1WS+qbs9Nu9fXViFKI02+iIH5ecOLdmAjWF7DvD4V
+# oIJETuJ0pk5CnbgVfJXpdspgERgtTZybpq5zOY0Ce8nrwPEArevmO+gqi6zbFfml
+# jb1FEI1Zea0NDjYYa5Y+J+BoJgx2N6O4Plp00T2gTn1YlBncYfy/4QoVWbN0LvYc
+# WGpfLiLY4+CcVtjeMD5B6ethQfPzsvIzuK5ew4EvFDFsgdRSJLFUjRSsXPgpeUUK
+# g6s1GLuEMjkG4rntvAT1uwmvs1CT5+HfSjSywelNWXuOkRZGvWgAP43YulXEg/Ww
+# H1lw0pDPaQLLFyoevHK7uNQ2KuANyYv7KtULcTMkxBwGCT1E+Nf+53IuA3VAYlfm
+# YaU8vib6Fc9MKwtim5ETKWnbd0WmtP7dnP17zaErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

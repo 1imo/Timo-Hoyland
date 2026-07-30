@@ -3,12 +3,20 @@ class GitLab {
     [string]$LocalPath
     [string]$Repo
     [string]$WebUrl
+    [Env]$Env
 
-    GitLab([string]$Remote, [string]$LocalPath) {
+    GitLab([Env]$Env) {
+        if (-not $Env) { throw '[!] GitLab requires Env' }
+        $this.Env = $Env
+        $this.WebUrl = $this.Env.Require('GITLAB_URL').TrimEnd('/')
+    }
+
+    GitLab([Env]$Env, [string]$Remote, [string]$LocalPath) {
+        if (-not $Env) { throw '[!] GitLab requires Env' }
+        $this.Env = $Env
         $this.Remote = $Remote
         $this.LocalPath = $LocalPath
-        if (-not $env:GITLAB_URL_PUBLIC) { throw '[!] GITLAB_URL_PUBLIC is required' }
-        $this.WebUrl = $env:GITLAB_URL_PUBLIC.TrimEnd('/')
+        $this.WebUrl = $this.Env.Require('GITLAB_URL').TrimEnd('/')
     }
 
     [void] Sync() {
@@ -97,15 +105,15 @@ class GitLab {
     }
 
     [void] SetVariable([string]$Key, [string]$Value, [bool]$Masked, [bool]$Protected) {
-        if (-not $env:GITLAB_TOKEN) { throw '[!] GITLAB_TOKEN is required' }
-        $headers = @{ 'PRIVATE-TOKEN' = $env:GITLAB_TOKEN }
+        $token = $this.Env.Require('GITLAB_TOKEN')
+        $headers = @{ 'PRIVATE-TOKEN' = $token }
         $payload = @{
-            key                 = $Key
-            value               = $Value
-            protected           = $Protected
-            masked              = $Masked
-            environment_scope   = '*'
-            variable_type       = 'env_var'
+            key               = $Key
+            value             = $Value
+            protected         = $Protected
+            masked            = $Masked
+            environment_scope = '*'
+            variable_type     = 'env_var'
         }
         $body = ($payload | ConvertTo-Json -Compress)
         $base = "$($this.WebUrl)/api/v4/projects/$([uri]::EscapeDataString($this.Repo))/variables"
@@ -139,8 +147,8 @@ class GitLab {
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDSkJm3X49Z3k4B
-# EGN3DaIS+4fs5LtSflTIRBfVzpZ9NKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBaZIFemBRZRjra
+# +jxGpt4dvdzPxVOp4PGtp7C0QOn1BKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -161,18 +169,18 @@ class GitLab {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIOnBx3Ew
-# W61agLJe/CMLFV19q+trm+4j75q+sLm5Va5UMAsGCSqGSIb3DQEBAQSCAgBrBOM0
-# AVv73ke6aHiqT9r+ntn2Wf1HDumTqvlMmilJF8gPlraPx6AOu4ZJ6rHgKf+g8SPf
-# WLQuMBFCoI5tSt27GHbv24tTFzjOAtdPITOmYlTqa25DIFGTeTJBgkgING6tK6Uk
-# yY79K291yQcC9c6ahjlLZ7gCk8Phqlon8oDq9oOFgcBbsL2UnKAhaEfVwnrWoTo0
-# 3Li7Pqs9zq3mszr7idWBNsW/rZVh1FS9OqL00+ZfpBTCAm7ikgBr0CZ5yfFbnYLL
-# ZnI4hNWWEAdKYdiv+Ek+8nMVUat0ii29F07GWBg2AkiUY0bJ5376lR5coRDDb7kX
-# 9+SrKowKenhDa6uN9++pbI2DMiiMXhtLSDnEZWFEvyZo/XHXpqY6lWuS8eRxVPNv
-# PZ2zv9E/bT/gnpt5iPmzq8j0/HGvga2/xiEUvzbpsEJUuihBPFVeEkO8Wl1yNGEp
-# ALdubj9WLu4I78qpF0Pl9psg9a56PLWRYNgYgbC39jKEMfrKMUAX8tUaSo2XCEZt
-# ghWcO6UAyfULaA0Zwwn78H9FnLBOuYF64JGsbKB8jKNDPKAVGLuGm8CgEjtcb4zH
-# 7dbZFMazy7WyiblQKCTx2CS+YVQhGYxCDE1cB6CeV67HHyhJ2IZ5M+IiXwa8A3DQ
-# IXn2NOmkgCNfkQ6oupSdMCHcn77gEGzrwdyk0aErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIHA2VH+r
+# OUnkvzqWTTM3QHWAAVIBB6w89c7SrC9NTpkrMAsGCSqGSIb3DQEBAQSCAgCOv38r
+# y0ZflDAt/OFgXnxINIOTtyAyprbswqgdT36aXOxHXkpg/62vbt3lq3mqTgJnNTV6
+# iPeYc3XH50AJlwZRv09YlxMfMhHg3iidTBRNCGP15wrOtEKlZg4dpoF3IaB4muwB
+# hV2MArXTCvTbRaQ5JD9YKZmQNS6vyak2zM6bRJbIXADy2xKK2vf//mNtDAI0o1PB
+# dz09X++uojTBgEI1ULIjpUozLejBrYW1/r/I6I+gqSa6+EU54ghsCVq77LpnpD7b
+# ERFrqFme4g7e+0S4iNV7S2rbS7OBk7xVo/cJOW7NP5EqB+4+eU8Tpzufueb+pvcU
+# nphl0U3BsxgIe+PxKYQGP0mnhr5zCik/OirsJ9hycxl7OH0q+yvXUfDExZAvm3ZA
+# Q96LlYtMSH5BLGeG3bVQyPoRd+HNV+QrL9VBY2dYUq9MeFCw5RCfdzKSVmCmtJRc
+# KBoIyiyvFXMlNSS4l/mX2P59fX12+qfYXTK0kTEaeP7BUaBYrceyMjb2Ld/JEica
+# kjCxODN3sqzLPqYDRLE4w95x5hPkZsbL9HOqkKwB9kU7ROj/FKysfkdMJ+Te3gO7
+# rE4PxCCA594TApCu4fwFG9AFgyIsFFZJI/fSCLJURurMjot3C7Wd1M02lIeee86N
+# l/r2vlXEEPuKG8n9PRdDXr8huYZiPF1T0dEtDKErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

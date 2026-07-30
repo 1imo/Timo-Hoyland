@@ -2,22 +2,24 @@
 
 `/cmd` and `/release` are separate — each dotsources only its own `lib/*.ps1` (no cross-imports).
 
-Env template: [`.env.example`](../../.env.example) → copy to `.env.development`, `.env.test`, or `.env.production`.
+Env template: [`.env.example`](../../.env.example) → `.env.development` / `.env.test` / `.env.live`, plus [`.env.shared.example`](../../.env.shared.example) → `.env.shared` (always loaded by `cmd/lib/Env.ps1`).
+
+Service hosts live in [`settings.cfg`](../../settings.cfg) under `ENDPOINTS.<SERVICE>.<CLUSTER|PUBLIC>`. After env is chosen, cmd asks for `NETWORK` (`cluster`|`public`) and injects the matching URLs into process env (`OPENSEARCH_URL`, `REDIS_URL`, …). `DB_URL` is built by `PostgreSql` from `ENDPOINTS.DB` + `DB_USER` / `DB_PASSWORD` + `{project}-{ENV}`. `apply-env` merges the selected network’s URLs into Vault.
 
 ## Apply scripts (`/cmd`)
 
 | Script | Purpose |
 |--------|---------|
-| `apply-alerts.ps1` | Kibana + Grafana alert rules |
-| `apply-dashboards.ps1` | ES template + Kibana + Grafana dashboards |
+| `apply-alerts.ps1` | OpenSearch Dashboards + Grafana alert rules |
+| `apply-dashboards.ps1` | OpenSearch `{project}-logging` + `{project}-cmd` streams + dashboards |
 | `apply-db.ps1` | `assets/db.sql` (creates DB if missing) |
 | `apply-env.ps1` | Push env files → Vault |
 | `apply-commit.ps1` | Commit + push to live/test remotes |
-| `apply-caddy.ps1` | Push `Caddyfile` → IaC repo |
-| `apply-synth-mon.ps1` | Push blackbox targets → IaC repo |
-| `apply-app-config.ps1` | Push root `compose.yml` → IaC repo |
-| `apply-dns.ps1` | Apply `public.dns.*` A records via Spaceship API |
+| `apply-dns.ps1` | Apply `public.dns.*` A (+ per-site TXT) via Spaceship |
+| `apply-google-observability.ps1` | GA4 account/properties + Search Console DNS verify |
 | `refresh-boilerplate.ps1` | Soft-pull boilerplate updates |
+
+Orchestrators construct `$Env` / `$Project` / `$Settings`, then `$Env.BindConfig($Settings, $Project)` so endpoint URLs are in process env. Libs keep using `$Env.Require('…_URL')`.
 
 ## Release pipeline (`/release`)
 
@@ -38,4 +40,4 @@ Finding-producing steps import reports to Defect Dojo and emit summaries to Elas
 | `Trivy.ps1` | Container image scan |
 | `Sonar.ps1` | SonarQube |
 
-Scanner images are pinned in each lib class. Scan reports go to `$TMP/release-scan`. Sonar runs via `sonar-scanner` on the runner. Bootstrap Defect Dojo / PostHog IDs via `./cmd/apply-dashboards.ps1`.
+Scanner images are pinned in each lib class. Scan reports go to `$TMP/release-scan`. Sonar runs via `sonar-scanner` on the runner. Bootstrap Defect Dojo IDs via `./cmd/apply-dashboards.ps1`.

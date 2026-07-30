@@ -1,24 +1,25 @@
 class DefectDojo {
     [string]$Url
     [string]$Token
-    [string]$ProjectName
     [int]$EngagementId
+    [Config]$Project
+    [Env]$Env
 
-    DefectDojo([string]$ProjectName) {
-        if (-not $env:DEFECT_DOJO_URL_PUBLIC) { throw '[!] DEFECT_DOJO_URL_PUBLIC is required' }
-        if (-not $env:DEFECT_DOJO_API_TOKEN) { throw '[!] DEFECT_DOJO_API_TOKEN is required' }
-        $this.Url = $env:DEFECT_DOJO_URL_PUBLIC.TrimEnd('/')
-        $this.Token = $env:DEFECT_DOJO_API_TOKEN
-        $this.ProjectName = $ProjectName
-        if ($env:DEFECT_DOJO_ENGAGEMENT_ID) {
-            $this.EngagementId = [int]$env:DEFECT_DOJO_ENGAGEMENT_ID
-        }
+    DefectDojo([Config]$Project, [Env]$Env) {
+        if (-not $Project -or -not $Project.Loaded) { throw '[!] DefectDojo requires project.cfg' }
+        if (-not $Env) { throw '[!] DefectDojo requires Env' }
+        $this.Project = $Project
+        $this.Env = $Env
+        $this.Url = $this.Env.Require('DEFECTDOJO_URL').TrimEnd('/')
+        $this.Token = $this.Env.Require('DEFECT_DOJO_API_TOKEN')
+        $engId = $this.Env.Get('DEFECT_DOJO_ENGAGEMENT_ID')
+        if ($engId) { $this.EngagementId = [int]$engId }
     }
 
     [int] EnsureEngagement() {
         if ($this.EngagementId) { return $this.EngagementId }
-        $staging = $this.StagingFromEnv()
-        $engagementName = "$($this.ProjectName)-$staging"
+        $staging = if ($this.Env.Name -eq 'live') { 'live' } else { 'test' }
+        $engagementName = "$($this.Project.Name)-$staging"
         $productId = $this.EnsureProduct()
         $existing = $this.FindEngagement($productId, $engagementName)
         if ($existing) {
@@ -35,58 +36,54 @@ class DefectDojo {
     [void] ImportScan([string]$Staging, [string]$ScanType, [string]$ReportFile, [string]$StepName) {
         if (-not $this.EngagementId) { throw '[!] DEFECT_DOJO_ENGAGEMENT_ID is required' }
         if (-not (Test-Path $ReportFile)) { throw "[!] report missing: $ReportFile" }
-        $title = "$($this.ProjectName)-$Staging-$StepName"
+        $title = "$($this.Project.Name)-$Staging-$StepName"
         $form = @{
-            scan_type        = $ScanType
-            test_title       = $title
-            engagement       = $this.EngagementId
-            file             = Get-Item -LiteralPath $ReportFile
-            active           = 'true'
-            verified         = 'true'
-            minimum_severity = 'Info'
+            scan_type         = $ScanType
+            test_title        = $title
+            engagement        = $this.EngagementId
+            file              = Get-Item -LiteralPath $ReportFile
+            active            = 'true'
+            verified          = 'true'
+            minimum_severity  = 'Info'
         }
-        $uri = "$($this.Url)/api/v2/reimport-scan/"
         Write-Host "[+] Defect Dojo import: $ScanType → $title"
-        $r = Invoke-RestMethod -Method Post -Uri $uri -Headers $this.Headers() -Form $form
+        $r = Invoke-RestMethod -Method Post -Uri "$($this.Url)/api/v2/reimport-scan/" -Headers @{
+            Authorization = "Token $($this.Token)"
+            Accept        = 'application/json'
+        } -Form $form
         if ($r.statistics) {
             Write-Host "[+] Defect Dojo: created=$($r.statistics.created) reactivated=$($r.statistics.reactivated)"
         }
     }
 
-    hidden [hashtable] Headers() {
-        return @{
+    hidden [int] EnsureProduct() {
+        $headers = @{
             Authorization = "Token $($this.Token)"
             Accept        = 'application/json'
         }
-    }
-
-    hidden [string] StagingFromEnv() {
-        switch ($env:ENV.ToLower()) {
-            'live' { return 'live' }
-            { $_ -in @('test', 'development') } { return 'test' }
-            default { throw "[!] ENV must be development, test, or live (got $env:ENV)" }
-        }
-    }
-
-    hidden [int] EnsureProduct() {
-        $uri = "$($this.Url)/api/v2/products/?name=$([uri]::EscapeDataString($this.ProjectName))"
-        $r = Invoke-RestMethod -Uri $uri -Headers $this.Headers()
+        $name = $this.Project.Name
+        $uri = "$($this.Url)/api/v2/products/?name=$([uri]::EscapeDataString($name))"
+        $r = Invoke-RestMethod -Uri $uri -Headers $headers
         foreach ($p in $r.results) {
-            if ($p.name -eq $this.ProjectName) {
-                Write-Host "[+] Defect Dojo product: $($this.ProjectName) (id=$($p.id))"
+            if ($p.name -eq $name) {
+                Write-Host "[+] Defect Dojo product: $name (id=$($p.id))"
                 return [int]$p.id
             }
         }
-        $body = (@{ name = $this.ProjectName; description = $this.ProjectName } | ConvertTo-Json -Compress)
+        $body = (@{ name = $name; description = $name } | ConvertTo-Json -Compress)
         $created = Invoke-RestMethod -Method Post -Uri "$($this.Url)/api/v2/products/" `
-            -Headers ($this.Headers() + @{ 'Content-Type' = 'application/json' }) -Body $body
-        Write-Host "[+] Defect Dojo product created: $($this.ProjectName) (id=$($created.id))"
+            -Headers ($headers + @{ 'Content-Type' = 'application/json' }) -Body $body
+        Write-Host "[+] Defect Dojo product created: $name (id=$($created.id))"
         return [int]$created.id
     }
 
     hidden [object] FindEngagement([int]$ProductId, [string]$Name) {
+        $headers = @{
+            Authorization = "Token $($this.Token)"
+            Accept        = 'application/json'
+        }
         $uri = "$($this.Url)/api/v2/engagements/?product=$ProductId&name=$([uri]::EscapeDataString($Name))"
-        $r = Invoke-RestMethod -Uri $uri -Headers $this.Headers()
+        $r = Invoke-RestMethod -Uri $uri -Headers $headers
         foreach ($e in $r.results) {
             if ($e.name -eq $Name) { return $e }
         }
@@ -94,25 +91,29 @@ class DefectDojo {
     }
 
     hidden [object] CreateEngagement([int]$ProductId, [string]$Name) {
+        $headers = @{
+            Authorization  = "Token $($this.Token)"
+            Accept         = 'application/json'
+            'Content-Type' = 'application/json'
+        }
         $start = (Get-Date).ToString('yyyy-MM-dd')
         $end = (Get-Date).AddYears(1).ToString('yyyy-MM-dd')
         $body = (@{
-            product      = $ProductId
-            name         = $Name
-            target_start = $start
-            target_end   = $end
-            status       = 'In Progress'
-        } | ConvertTo-Json -Compress)
-        return Invoke-RestMethod -Method Post -Uri "$($this.Url)/api/v2/engagements/" `
-            -Headers ($this.Headers() + @{ 'Content-Type' = 'application/json' }) -Body $body
+                product      = $ProductId
+                name         = $Name
+                target_start = $start
+                target_end   = $end
+                status       = 'In Progress'
+            } | ConvertTo-Json -Compress)
+        return Invoke-RestMethod -Method Post -Uri "$($this.Url)/api/v2/engagements/" -Headers $headers -Body $body
     }
 }
 
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDjWS4EDPw/r/AU
-# 1jpSNd6b55flV4uqNz9FPBpKsD2RbaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAm5hiSJ7/+osbA
+# kWP8hIOKzEfpkcyYIyVkc53IKhzl7KCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -133,18 +134,18 @@ class DefectDojo {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIJXcjKcq
-# N4NYeyEIIoWa0LonscEmt3qbhKdEX4qhD7JiMAsGCSqGSIb3DQEBAQSCAgApyyYN
-# InaDsHcX5cVQcCyAq4HULOuy4j7BqkI3WE/d5OL2suEGEPH8lag5iS22W9xXrrZM
-# p91Rp7638OlzSGfiYahUofnr1FR6Ypz4OW0OXFnQdyr884ylth7eKYEGNqqcjLNR
-# xfIw+vGP2hgBawzxuUB/DtfUvUyWmG4Z2ib6oKl752aikylbZYhdGP7Ii6X81XA2
-# Zso3SjpyntPzFNhkJ5sBq7RUghWMZY0QQAmw+CPy+19fVUMkF+WwXY94Yp+bI6mb
-# ir1EDPn/dwzYERG9IybGYTUgk7CZJlIacXSAsM0MVIMQ627aEv1VcvpoIomFYG0I
-# bdxYCy3M7hU3Ti2DgDNxmhKEx/iyA+lzYq9L5xbl9kv725m//T03bv9BMx+5rE/U
-# hCbjaHxSbyUhcUuK4aPlJNWfxiXvqvP8arR6pxZo+xHgwowyfQhn3+pDr3PzJygX
-# akfC1PbBVgWQZdSxKIKgXma078CtmQKdokcLEQU+QX8laRpeYAYM61O+wn0K+UEX
-# L3ybP25TZcdIsmmQqsdbbpO/oI2eX3MdgmK5q460ND6fkKGJhTxbFCI28OlKTHXX
-# LFdnrwIzmuwBZfy0iZs7wd9J8mCun/cT0UhteQOY1qd8FDLpbA6+iD5HvWKauXuK
-# xSukIlZv9s8aTrL8Ub9uo5wBEpHsYhxbzFyR6aErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIEkiJmwp
+# dlos36Usn5fNAvHkG93s9CR8ZTO9yGzTcj67MAsGCSqGSIb3DQEBAQSCAgCDDlMz
+# 44yCTkQ2xd5KMBsq5/aQ77KEeYtwrCNE7Wl9RgegzwWne19kQpkvy8Ra1tneszVB
+# pL31s8j7qc9MKVZkbz2s8NyLUpiA2/dHsfL8XJthcieEM/3tZO5pArhCo+cPbxVN
+# 5cd1XxpfYi5Rn3yEX5JUE04TlOGkayPGyUiC4y6XFC9rPn7v5PDm6yNfmxq2q6ja
+# H+kmge5Woi+D7mhbwHHcRpWwFW43ZqdKNXS/LSeyC7u8wFkAeWCtrD2sEcFpNbnX
+# +BXjFSTG7isBCQHY2gHfphrHZf0o5ReI7ZHx55FaCYus/B3q4nFs8ffYWOz3DFWC
+# k96A7o1T4vR9ad4n2yXvsU2Ny9RPNpwevLfZ8chiRmBOEJwGH0uLgcPruN7uXN6H
+# /IYfBu9C1RebkwS09DmdUWHE8/aoEZVxfHLvbnbjkXZnWttXJhQhKBA3XgDXSQj/
+# M5iyl4gZEqdKskIyEgZPblAYnZ6En2x944e8mi0sBD4jKUjzzlImp1rXe8j1LMi7
+# NLEzSyBZAvt3VIpJVdqqB4hPByN2eaF7tcWBZBjumNPC26syOm0SFwPpaNt+YGa6
+# VP1SB79oaSQunxtB/k52TLIQueLZvv1fCyrNcGfY5CUxgDefRRzPPyt2p7Abcflv
+# ioOeVrbgPdCoMVvDhCsDN2kFMyCt3pLO4mdbAKErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block
