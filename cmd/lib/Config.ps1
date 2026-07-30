@@ -4,151 +4,43 @@ class Config {
     [hashtable]$Data
     [string]$Name
     [bool]$Loaded
+    [Tuf]$Tuf
 
-    # Pinned settings.cfg.sig — update when re-signing settings.cfg.
-    hidden [string]$ExpectedSettingsSigFormat = 'cms-detached'
-    hidden [string]$ExpectedSettingsSigKeyName = 'nottinfra-config'
-    hidden [string]$ExpectedSettingsSigDigest = 'sha256:b288364d4a942ae1b95bcc7c51de675ea679d44cad73635571caa5ca8c9136f6'
-    hidden [string]$ExpectedSettingsSigUrl = 'https://nottinfra.co.uk'
+    # Fallback when OPENSEARCH_URL is unbound (e.g. unsigned-settings alert path).
     [string]$PinnedOpenSearchPublicUrl = 'https://opensearch.nottinfra.co.uk'
 
-    hidden [string] ExpectedSettingsSigCmsPem() {
-        return @'
------BEGIN CMS-----
-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
-xd/L5kXuWvM2/wdC98tKOYpC2AA2C51tFBcC5A==
------END CMS-----
-
-'@
-    }
-
-    hidden [string] ExpectedSettingsSigCertPem() {
-        return @'
------BEGIN CERTIFICATE-----
-MIIDVTCCAvugAwIBAgIRAKDf2sb4UMzR8nVYLvQZP0IwCgYIKoZIzj0EAwIwIDEe
-MBwGA1UEAxMVTm90dEluZnJhIEludGVybmFsIENBMB4XDTI2MDczMDEwNDM0NloX
-DTI3MDczMDEwNDM0NlowKjEoMCYGA1UEAxMfTk9UVElORlJBIExJTUlURUQgQ09O
-RklHVVJBVElPTjCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAL3YgBVF
-K2PeAf80KLpf/mWyj/RFSB6u4koA8tvCVr16IUrufXqf7fhW9Qh0K2aYdEdcTO1A
-f3XvkMk8mNrnMMhgbtrz3mMMXX81xzYcYUHXeVZE3m4X1M04Lcoq9o8AlYMXCU0a
-1MGJL6bHcuk85GYm/P+2pqsveruR8kSn0VYxhvrbxWJx4VzIObvvfi0LDWCN2YYC
-7njpG73JzW3IGcmTAim0zE3E7VW9gvSyu1GDejDNPR9hMJrw/OTwX9b35JPV+jan
-KF59XW0oL18sIqPl0/QtUpOal9TYUeihypiBlfuy03e8lZ80mKqmIB3JTLsXv0Le
-WxjTHnkdH7y927oGOtoFFUY0mDzEQTifsVuEQDmTCqTrItgWkhUEGP0lp0JU6pTs
-cyIedgKF253mMtdwoE7Ncp3Tb2L/A109B6QoFyNBDiGcjjDsRzeryHwAfcFmSkNb
-ouBPrNjBI8ALjSa/v+5JVAnPOMjohlkci7yDS+gVwKONUyxUYjrkKy3/K0UZcuJJ
-Gd50Xz0hJ6TxSeXsc1T3vn0eE3WSgB9aP3sdNpuNkz+U2SiP8yoOlrWsrwOTCBYG
-wRxkMC1wJXgcbtI7NpD/1zNy53uzm0Ei7LV5HUlZZ0EMG+QNS/jPpkVhTNhjxzcE
-000+ytLBuFla0UeHluMX6/ZhKGQeoIhXu8rVAgMBAAGjQTA/MA4GA1UdDwEB/wQE
-AwIFoDAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFKF88Blhy5xs0hQfn4medNFL
-3FoXMAoGCCqGSM49BAMCA0gAMEUCIQDzbVV7ImHLZH//KhhpQnAlF59TJPVSYHoF
-pNJAwHtWCgIgT5dcCskZLN7DvjSaNesTmclhoLqjylNlyqHlkjxeOKo=
------END CERTIFICATE-----
-
-'@
-    }
-
-    hidden [string] UnsignedSettingsErrorPrefix() {
-        return '[!] UNSIGNED_SETTINGS_CFG'
-    }
-
-    hidden [string] NormalizePem([string]$Text) {
-        if ($null -eq $Text) { return '' }
-        return (($Text -replace "`r`n", "`n") -replace "`r", "`n").TrimEnd() + "`n"
-    }
-
-    hidden [void] AssertSettingsSigned([string]$SettingsPath) {
-        $sigPath = $SettingsPath + '.sig'
-        $prefix = $this.UnsignedSettingsErrorPrefix()
-        if (-not (Test-Path -LiteralPath $sigPath)) {
-            throw ($prefix + ': missing ' + $sigPath)
-        }
-        try {
-            $sig = Get-Content -LiteralPath $sigPath -Raw -Encoding utf8 | ConvertFrom-Json
-        }
-        catch {
-            throw ($prefix + ': cannot parse ' + $sigPath + ' (' + $_.Exception.Message + ')')
-        }
-
-        $checks = [ordered]@{
-            format          = $this.ExpectedSettingsSigFormat
-            key_name        = $this.ExpectedSettingsSigKeyName
-            digest          = $this.ExpectedSettingsSigDigest
-            url             = $this.ExpectedSettingsSigUrl
-            cms_pem         = $this.ExpectedSettingsSigCmsPem()
-            certificate_pem = $this.ExpectedSettingsSigCertPem()
-        }
-        foreach ($key in $checks.Keys) {
-            $expected = [string]$checks[$key]
-            $actual = [string]$sig.$key
-            if ($key -in @('cms_pem', 'certificate_pem')) {
-                $expected = $this.NormalizePem($expected)
-                $actual = $this.NormalizePem($actual)
-            }
-            if ($actual -ne $expected) {
-                throw ($prefix + ': ' + $sigPath + ' ' + $key + ' does not match pinned signature')
-            }
-        }
-
-        $sha = [System.Security.Cryptography.SHA256]::Create()
-        $got = ''
-        try {
-            $bytes = [System.IO.File]::ReadAllBytes($SettingsPath)
-            $hex = ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
-            $got = 'sha256:' + $hex
-        }
-        finally {
-            $sha.Dispose()
-        }
-        if ($got -ne $this.ExpectedSettingsSigDigest) {
-            throw ($prefix + ': settings.cfg digest ' + $got + ' does not match pinned ' + $this.ExpectedSettingsSigDigest)
-        }
-    }
+    # TUF targets-role ed25519 public key from root (keyid 4b7b9ec5…).
+    hidden [string]$TufTargetsPublicKeyHex = '5fb64cdf03bbce4a54d27cf1981614075066732297f1539a5d39160f6de7dc13'
+    hidden [string]$TufTargetsKeyId = '4b7b9ec52e91431e7310abf27edf4d3b0abb39308801b038aad8dac35f0f8907'
+    # TUF target used as CMS trust anchor for settings.cfg.sig.
+    hidden [string]$SettingsCaTarget = 'nottinfra.crt'
 
     Config([string]$FileName) {
+        $this.Init($FileName, $null)
+    }
+
+    Config([string]$FileName, [Tuf]$Tuf) {
+        $this.Init($FileName, $Tuf)
+    }
+
+    hidden [void] Init([string]$FileName, [Tuf]$Tuf) {
         if ([string]::IsNullOrWhiteSpace($FileName)) { throw '[!] config file name required' }
         $this.File = $FileName
+        $this.Tuf = $Tuf
         $this.Data = @{}
         $this.Tree = @{}
         if (-not (Test-Path $FileName)) { return }
         $this.File = (Resolve-Path $FileName).Path
         if ([IO.Path]::GetFileName($this.File) -eq 'settings.cfg') {
-            $this.AssertSettingsSigned($this.File)
+            if (-not $this.Tuf) { throw '[!] settings.cfg requires Tuf' }
+            $this.Tuf.TargetsKeyId = $this.TufTargetsKeyId
+            $this.Tuf.TargetsPublicKeyHex = $this.TufTargetsPublicKeyHex
+            try {
+                $this.Tuf.CheckSigned($this.File, ($this.File + '.sig'), $this.SettingsCaTarget)
+            }
+            catch {
+                throw ('[!] UNSIGNED_SETTINGS_CFG: ' + $_.Exception.Message)
+            }
         }
         $this.Tree = $this.ReadYaml()
         $this.Loaded = $true
@@ -381,12 +273,11 @@ pNJAwHtWCgIgT5dcCskZLN7DvjSaNesTmclhoLqjylNlyqHlkjxeOKo=
     }
 }
 
-
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDQfSLh4CQptLHU
-# Z94DzSSdh9zoq7ZYIBjh9ePpqaCxHqCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCDQUNxHccBxVJZ
+# oionDQemdvdyRiNUAFXqxDoIuGOAkaCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -407,18 +298,18 @@ pNJAwHtWCgIgT5dcCskZLN7DvjSaNesTmclhoLqjylNlyqHlkjxeOKo=
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEINzFSS17
-# CNDHIm5dkhpwOJUiR9bHg1fqH+nUoDUYIsvyMAsGCSqGSIb3DQEBAQSCAgCSpyoI
-# bVF/KSS1Kw1DhAFPrqj9UC1SHHMYjF6Sjy0mMxZhmoI/TN0qfyhYFgSUcGpa6+IR
-# d2jDwm5soQDCaS6nZgYHERXiWFnhHcgeP+IcjDCwtsbUume9u+PI+f+pdfQXTM+B
-# K7XPVra0kMdXX57Z0h7wWF2zLSyP4jldx1OJsbrBNqw2WjEPczHsD8k7sOPaoRq+
-# 5S/h92WfiWlzjrcmVjm+idGhAEyGNftgyTSnD7h9rE72EqL/qEfIM0T/QTaLISSd
-# bvYlMT7JxMRYqVE3Gz39gqjsUgVd69IxaHyaIct2koWlvqIK2cz8TEQJFe8AizoJ
-# ZlK87OTNJvV9c4amC/7v1Mflwoaebzn4n5nQC/u83iUZc7p9BJsicDSiqAEJEjJv
-# I1XREGX7l2xfhiS+5601KS+p1BOChHUjFKYkuVVNh5po52hLG15d8LQrM4fKoRpp
-# 05OPDD4k6XXvg73j1UjLMCyYe0YTzY6NBMymQxJGATEBrg+3410EGlQ35Mg5ZMsL
-# 9Z8xYZHM9xV4iaxd3Cyr8xyyZSS1TxM8M/LpVH46YT9uT5nhO50RabWDHmrkioYG
-# 1S1gzgsJMkdOHNZfgjIt05HhSS0Qw3A52P38vZhdPhoW9q9KZlOrlbcp9Lnnaidv
-# KVQZZkK0zp+N8wfSVLYxQAm4Dgt09jpKAsD6BqErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIGRuRxNg
+# jQ2n08SWg8va/pYG4ZiRp/eXveJ1wIYHlvG8MAsGCSqGSIb3DQEBAQSCAgB90Wd5
+# KyD/5iOh27eigvLgMVZuEnnDDBeYAoIXMtKvhb/V1RrCEdnaqPuGxbyE82MKHIg5
+# a5hTJzTXD1ZSi+cgIR5cYZq/Lb+JCWanRuB6nqx1vEjoKpHg1CjpQoKkGXPiCyFe
+# KhEcfaUzRWFQUT89f313g08yZrq2OBw1+RrhMJjujuFIfXJtrB8hkp2OpgjAw9Qw
+# 3bQIG8mEObiVWDu9cRi/BHRvCpUHUMkwh0krDgFiXKLf0APi7m3pbQcRAhVXVDOW
+# QbntqAYM2dvAjlj9+tBS0Tywy4hBSsCqriEHKbCyD8PWXY0A6sdWp1sFm2Uda7WP
+# Q/6kUydxkCDWRN9dzhhOfTq1up1M5NUJETFX8uCFLHzUSoJ1CXv0n4Qim3VG0xdg
+# /yhmn0Ecqbns4lxQshheRVGFtI+HHVFeSpHcPRV7EkVhIkWYux2f0WehQc+Fbhnk
+# xsZFeE25kAiRrleKzJ/WfHi5PFgnA/24mX+z/O7fxWps+S62qgXFr/NaVg0EcN29
+# dc0euORPMAg6iSDxRPu4tPvXYwdk+UYbfbOxhuS41LCCwn/gR+7c+m0AhnKDsTBK
+# XVr0H5Y6hf8qMP7QBwjqOBVxo1F3I0x4EQ2I6E63hFgEwzrbtdkcujBq2Z8AbmuD
+# gXUsOeb668jFifrUVPp16OeKsCQoBg5Phl+YtaErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block

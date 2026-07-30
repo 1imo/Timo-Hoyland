@@ -1,61 +1,36 @@
+POSTHOG:
+- BOOTSTRAP=
+- SHARED_INFRA=
+- SECRET=
+- ENCRYPTION_SALT_KEYS=
+
+PROMETHEUS:
+- RETENTION_TIME=
+
+RABBITMQ:
+- USER=
+- PASSWORD=
+
+RCLONE:
+  AWS:
+    - ACCESS_KEY_ID=
+    - SECRET_ACCESS_KEY=
+    - CONSOLE_URL=
+    - CONSOLE_USER=
+    - CONSOLE_PASSWORD=
+  S3:
+    - BUCKET=
+    - OBJECT=
+    - REGION=
+  CRYPT:
+    - PASSWORD=
+
+# Private Sigstore stack (gitsign / cosign) — used by cmd/apply-commit.ps1
 SIGSTORE:
-  OIDC_REDIRECT_URL:
-
-GOOGLE:
-  OAUTH_REDIRECT_URL: http://localhost:8080
-
-ENDPOINTS:
-  CTLOG:
-    CLUSTER: ""
-    PUBLIC: ""
-  DB:
-    CLUSTER: ""
-    PUBLIC: ""
-  DEFECTDOJO:
-    CLUSTER: ""
-    PUBLIC: ""
-  FULCIO:
-    CLUSTER: ""
-    PUBLIC: ""
-  GITLAB:
-    CLUSTER: ""
-    PUBLIC: ""
-  GRAFANA:
-    CLUSTER: ""
-    PUBLIC: ""
-  GROWTHBOOK:
-    CLUSTER: ""
-    PUBLIC: ""
-  KEYCLOAK:
-    CLUSTER: ""
-    PUBLIC: ""
-  MATOMO:
-    CLUSTER: ""
-    PUBLIC: ""
-  OPENREPLAY:
-    CLUSTER: ""
-    PUBLIC: ""
-  OPENSEARCH:
-    CLUSTER: ""
-    PUBLIC: ""
-  OPENSEARCH_DASHBOARDS:
-    CLUSTER: ""
-    PUBLIC: ""
-  OTEL:
-    CLUSTER: ""
-    PUBLIC: ""
-  REDIS:
-    CLUSTER: ""
-    PUBLIC: ""
-  REKOR:
-    CLUSTER: ""
-    PUBLIC: ""
-  SONAR:
-    CLUSTER: ""
-    PUBLIC: ""
-  TUF:
-    CLUSTER: ""
-    PUBLIC: ""
-  VAULT:
-    CLUSTER: ""
-    PUBLIC: ""
+- FULCIO_URL=https://fulcio.nottinfra.co.uk
+- REKOR_URL=https://rekor.nottinfra.co.uk
+- CTLOG_URL=https://ctlog.nottinfra.co.uk
+- TUF_MIRROR_URL=https://tuf.nottinfra.co.uk
+- OIDC_ISSUER=https://keycloak.nottinfra.co.uk/realms/nottinfra
+- OIDC_CLIENT_ID=gitsign
+- OIDC_REDIRECT_URL=http://127.0.0.1:27274/auth/callback

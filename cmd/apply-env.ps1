@@ -2,6 +2,7 @@
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/lib/Env.ps1"
+. "$PSScriptRoot/lib/Tuf.ps1"
 . "$PSScriptRoot/lib/Config.ps1"
 . "$PSScriptRoot/lib/OpenSearch.ps1"
 . "$PSScriptRoot/lib/PostgreSql.ps1"
@@ -14,7 +15,7 @@ $Env = [Env]::new()
 $Project = [Config]::new('project.cfg')
 $os = $null
 try {
-    $Settings = [Config]::new('settings.cfg')
+    $Settings = [Config]::new('settings.cfg', [Tuf]::new())
     $Env.BindConfig($Settings, $Project)
     [PostgreSql]::new($Env, $Settings, $Project) | Out-Null
     $os = [OpenSearch]::new($Env, $Project, "$($Project.Name)-cmd")
@@ -96,8 +97,8 @@ catch {
 # SIG # Begin signature block
 # MIIHBQYJKoZIhvcNAQcCoIIG9jCCBvICAQMxDTALBglghkgBZQMEAgEwewYKKwYB
 # BAGCNwIBBKBtBGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAZD3Xl2Z7AAuDD
-# y+39bRDkj/ZL9Q/Zdtfe3EWwscyHBKCCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDAKVQsAtlH5OYN
+# Wnm2LHFeObtf0QneBDLwPODNfuDVz6CCA1QwggNQMIIC9qADAgECAhEAn7eSCz3E
 # R/b0C5YxX/PjyDAKBggqhkjOPQQDAjAgMR4wHAYDVQQDExVOb3R0SW5mcmEgSW50
 # ZXJuYWwgQ0EwHhcNMjYwNzI3MjM0NDE1WhcNMjcwNzI3MjM0NDE1WjAlMSMwIQYD
 # VQQDExpOT1RUSU5GUkEgTElNSVRFRCBTT0ZUV0FSRTCCAiIwDQYJKoZIhvcNAQEB
@@ -118,18 +119,18 @@ catch {
 # ezJPirlP+IxtyaFnz10xggMHMIIDAwIBATA1MCAxHjAcBgNVBAMTFU5vdHRJbmZy
 # YSBJbnRlcm5hbCBDQQIRAJ+3kgs9xEf29AuWMV/z48gwCwYJYIZIAWUDBAIBoHww
 # EAYKKwYBBAGCNwIBDDECMAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIFKPDM2P
-# LQf3t4oIMq52wOhk3HMPKjTRS93Rd3p3u/HKMAsGCSqGSIb3DQEBAQSCAgBmahag
-# AzS5LXFOUcGrrGTzpjF7TlHq8K0wjaROeR6nUbDDgxiOIgMDHI5/Nobgnew4Qrxf
-# xp1PLPzkAjNmvNsmglxDkGH9KgRGPfcF+weXuy2VEBejpUZa60CYeTSJlKWbWe8S
-# hFlQm6ROtJvYi/3WFhW5EmEQ3ABv6dK3BneI5uqK1yNBD19QwiEyT+tBKkqvynRc
-# Aw5IvbcWzGGKseFjBaHbB6v+O5on9GeQ3udgfSxzMpjqsk/TxzuD69zckCpkGPf0
-# o0AVwrLdPcYFUTwJdJEYdUEx/XIgbXIKmfMlvV+Bn3vUKls8rx1DMxvcf7jPM4Mw
-# SwjDIlwzqsUno+v1r2cGgt0jFlaINgxFwmO0a89ha/5oiuy+JxGVxN1oP44CynD4
-# 9OeJM8+SN45xfU9fEmhRumd3FyGpeQTeL5lHqCwz+0Z2cOINwxwxMHR1pOojXWHY
-# p1EZtjSjypNE49XA/4FKVuQn+Prxmf+gVl+ohGNeuWyi+4msDGXbeMhpvkxrz72X
-# WNmwDdzP5SHL5ByClsm1G+UxsX4o5utCr7wiwkQUG4RzWFlcdLYhOsg66bH+Cmxk
-# FS9yVG6aF8G0uyNqlAAeZMK+DH+akPcAxMglj/LmOIrhLXrKmEEl+8+QL4GayKZy
-# LR4USGX3VpnXP18ovrjFvV+ojMiOgWoYpKpC2aErMCkGDCsGAQQBgoxMCgABAzEZ
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIFFugjE3
+# C27EwPB5fIKE3BKJmfGmsMi7ykE4nnbbG998MAsGCSqGSIb3DQEBAQSCAgBHDJgB
+# YGgMRGeIFJNTi92NDboWQgnhiLvmhdTFeGkTizAli6BrKhwa79WFSy7wtdr6MBMO
+# 6FgunKPhjYWg3Ti+FtKGpyjskYsOY2AqAyQlgkhef577jLkeANEdz9DH+JwSbNhq
+# xDRlBAX1/C1wI06FJB78Tt6XUCChpfn8eb18HAwZ7Lcvhxw3/ZFd4iW54yB93hfB
+# Io9ci/Tij+WAUJaFJILfQC3Ic4Onnb9NOvWX65alAlkuF+f44BF/G53H13KRsDtA
+# qENs58mLYmPXjcZ7oAxHesAZ6oAexkGoAMlk6iwxGWSzU5TpYSWfT8gxUoAxnS24
+# mElIKo5w1ZNT3xiAwUyc8MOAnLBTygVzmi9UD3uaWvkcEUpezESI/p8pM+Gt019A
+# 0k1j7qsLoQl1FnuZOPnH/EUoq7tkVXoZkSV/iVNgh8Po3mWWgIhxDm377mKkmgQg
+# q2SHP4qzP2ya1b4NtpqwScwmn5tOJDUw+ij0GSBWwK4ZvKKrzYm12c1Sqjj5zTBu
+# t84vTV7+I5p3Kul9ChNAXtAfgHHy1vq2Pza9FtiwU8j69r8BGYHOAaxX+lOjRUHN
+# AKnJ2xfuigzRcC8ptpzCEMoXWId6RbrlKXqknK2MmZ+qi0nAvPEC3wn2Uh19T7X0
+# w/wAroRnwxJx0MI72HMlrVqxlQmr+gNdzm0oCqErMCkGDCsGAQQBgoxMCgABAzEZ
 # BBdodHRwczovL25vdHRpbmZyYS5jby51aw==
 # SIG # End signature block
