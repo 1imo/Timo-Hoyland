@@ -1,5 +1,5 @@
 ---
-title: Don't let them
+title: Boundaries in Client Engagements
 slug: boundaries-in-client-engagement
 description: Why no is not resistance but professional rigour - and how clear ownership protects the client and outcome.
 keywords: Timo Hoyland, T. Hoyland, Timothy Hoyland, Timo Hoyland Nottingham, Nottinghamshire Timo Hoyland, Hoyland, Engineer, Ironwood Close, Edwalton, client boundaries, delivery ownership, engagement discipline, scope management, professional judgement, consultancy, engineering leadership, delivery
