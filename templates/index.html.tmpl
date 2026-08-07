@@ -80,7 +80,6 @@
 </head>
 <body>
     <header role="banner">
-        <p>Supporting teams and improving IT services across agency, enterprise, client-facing environments. Focus on team-building, reliability, cost measures.</p>
         <h1>Timo Hoyland</h1>
         <nav aria-label="Main navigation">
             <a href="https://linkedin.com/in/timo-hoyland" rel="noopener noreferrer" target="_blank">LinkedIn</a>
@@ -90,11 +89,11 @@
     </header>
     <main role="main" id="main-content">
         {{ range .Articles }}
-        <article aria-labelledby="article-{{ .Slug }}-title">
+        <article{{ if .Theme }} aria-labelledby="article-{{ .Slug }}-theme"{{ end }}>
             <hr aria-hidden="true">
-            <h2 id="article-{{ .Slug }}-title">{{ .Title }}</h2>
-            <p>{{ .Description }}</p>
-            <a href="/article/{{ .Slug }}" aria-label="Read more: {{ .Title }}">Read more</a>
+            {{ if .Theme }}<p id="article-{{ .Slug }}-theme">Theme: {{ .Theme }}</p>{{ end }}
+            <p>{{ .Excerpt }}</p>
+            <a href="/article/{{ .Slug }}" aria-label="Read more{{ if .Theme }}: {{ .Theme }}{{ else if .Title }}: {{ .Title }}{{ end }}">Read more</a>
         </article>
         {{ end }}
     </main>

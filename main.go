@@ -22,7 +22,9 @@ type Article struct {
 	Slug           string
 	Description    string
 	Keywords       string
+	Theme          string
 	Body           string
+	Excerpt        string
 	Created        string
 	Updated        string
 	DisplayUpdated string
@@ -198,6 +200,8 @@ func parseArticle(data []byte) (Article, error) {
 				a.Description = val
 			case "keywords":
 				a.Keywords = val
+			case "theme":
+				a.Theme = val
 			case "created":
 				a.Created = val
 			case "updated":
@@ -206,13 +210,49 @@ func parseArticle(data []byte) (Article, error) {
 		}
 	}
 
+	if a.Theme == "" {
+		a.Theme, bodyMarkdown = peelThemeLine(bodyMarkdown)
+	}
+
 	var buf bytes.Buffer
 	if err := goldmark.Convert([]byte(bodyMarkdown), &buf); err != nil {
 		return Article{}, fmt.Errorf("rendering markdown: %w", err)
 	}
 	a.Body = buf.String()
+	a.Excerpt = truncateRunes(bodyMarkdown, 255)
 
 	return a, nil
+}
+
+// peelThemeLine removes a leading "Theme: …" line from the body and returns the theme value.
+func peelThemeLine(body string) (theme, rest string) {
+	body = strings.TrimLeft(body, "\n\r")
+	first, after, found := strings.Cut(body, "\n")
+	first = strings.TrimSpace(first)
+	const prefix = "Theme:"
+	if !strings.HasPrefix(first, prefix) && !strings.HasPrefix(strings.ToLower(first), "theme:") {
+		return "", body
+	}
+	// Accept "Theme:" regardless of casing on the key
+	idx := strings.Index(first, ":")
+	theme = strings.TrimSpace(first[idx+1:])
+	if !found {
+		return theme, ""
+	}
+	return theme, strings.TrimSpace(after)
+}
+
+func truncateRunes(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	truncated := runes[:n]
+	if i := strings.LastIndex(string(truncated), " "); i > n*3/4 {
+		truncated = []rune(string(truncated)[:i])
+	}
+	return string(truncated) + "…"
 }
 
 func formatHumanDate(t time.Time) string {

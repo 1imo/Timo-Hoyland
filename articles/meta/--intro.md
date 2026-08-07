@@ -1,13 +1,11 @@
 ---
-title: Intro
+title:
 slug: intro
-description: Timo Hoyland – Site Reliability Engineer. Supporting teams and improving IT services across agency, enterprise, and client-facing environments. Based in Nottingham.
+description: 
 keywords: Timo Hoyland, T. Hoyland, Timothy Hoyland, Timo Hoyland Nottingham, Nottingham, NottInfra, Site Reliability Engineer, infrastructure, reliability, team building, IT services, engineering leadership, platform engineering, DevOps, cost control, operational risk
 created: 2026-02-16
 updated: 2026-03-15
 ---
-
-Theme: Architecture / Reliability / Cost / Governance / Engineering / Career 
 
 I maintain this space to articulate how I reason about infrastructure, engineering, and professional challenges. My objective is to make visible the judgment process I use when balancing operational trade-offs, constraints, and technical risk.
 

@@ -98,15 +98,10 @@
             padding-left: 1.5rem;
         }
 
-        .article-date {
-            margin-top: 0.25rem;
-            margin-bottom: 1rem;
-        }
     </style>
 </head>
 <body>
     <header role="banner">
-        <p>Supporting teams and improving IT services across agency, enterprise, client-facing environments. Focus on team-building, reliability, cost measures.</p>
         <h1>Timo Hoyland</h1>
         <nav aria-label="Main navigation">
             <a href="https://linkedin.com/in/timo-hoyland" rel="noopener noreferrer" target="_blank">LinkedIn</a>
@@ -117,11 +112,8 @@
     <main role="main" id="main-content">
         <article aria-labelledby="article-title" itemscope itemtype="https://schema.org/Article">
             <hr aria-hidden="true">
-            <h2 id="article-title" itemprop="headline">{{ .Title }}</h2>
-
-            <p class="article-date">
-                <time datetime="{{ .Updated }}" itemprop="dateModified">{{ if .DisplayUpdated }}{{ .DisplayUpdated }}{{ else }}{{ .Updated }}{{ end }}</time>
-            </p>
+            {{ if .Theme }}<p{{ if not .Title }} id="article-title" itemprop="headline"{{ end }}>Theme: {{ .Theme }}</p>{{ end }}
+            {{ if .Title }}<h2 id="article-title" itemprop="headline">{{ .Title }}</h2>{{ end }}
 
             <meta itemprop="datePublished" content="{{ .Created }}">
             <meta itemprop="dateModified" content="{{ .Updated }}">
