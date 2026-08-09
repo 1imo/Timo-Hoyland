@@ -1,0 +1,220 @@
+{{ define "cookie-banner" }}
+<dialog id="cookie-banner" class="cookie-banner" aria-labelledby="cookie-banner-title" aria-describedby="cookie-banner-desc" tabindex="-1">
+    <div class="cookie-banner-inner">
+        <p id="cookie-banner-desc">
+            We use cookies to improve our service and to analyse traffic. See our <a href="/legals/cookies">Cookie Policy</a> for more details.
+        </p>
+
+        <h1 id="cookie-banner-title">Cookies</h1>
+
+        <nav class="cookie-banner-actions" aria-label="Cookie preferences">
+            <button type="button" id="cookie-allow">Allow all</button>
+            <button type="button" id="cookie-deny">Reject all</button>
+        </nav>
+
+        <hr aria-hidden="true">
+    </div>
+</dialog>
+<script>
+(function () {
+    var CONSENT_COOKIE = 'cookie_consent';
+    var CONSENT_DAYS = 365;
+    var THEME_OPEN = '#747474';
+    var banner = document.getElementById('cookie-banner');
+    var lastFocus = null;
+    var themeMeta = null;
+
+    function generateConsentId() {
+        var bytes = new Uint8Array(32);
+        (window.crypto || window.msCrypto).getRandomValues(bytes);
+        var bin = '';
+        for (var i = 0; i < bytes.length; i++) {
+            bin += String.fromCharCode(bytes[i]);
+        }
+        return btoa(bin);
+    }
+
+    function readConsentRecord() {
+        var match = document.cookie.match(new RegExp('(?:^|; )' + CONSENT_COOKIE + '=([^;]*)'));
+        if (!match) return null;
+        var raw = decodeURIComponent(match[1]);
+        try {
+            var data = JSON.parse(raw);
+            if (data && (data.v === 'all' || data.v === 'essential') && data.id && data.t) {
+                return data;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function getConsentValue() {
+        var record = readConsentRecord();
+        return record ? record.v : null;
+    }
+
+    function formatConsentDate(iso) {
+        if (!iso) return '—';
+        var date = new Date(iso);
+        if (isNaN(date.getTime())) return '—';
+        return date.toLocaleString('en-GB', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+            timeZoneName: 'short'
+        });
+    }
+
+    function stateLabel(value) {
+        if (value === 'all') return 'Allow';
+        if (value === 'essential') return 'Deny';
+        return 'Not set';
+    }
+
+    function updateConsentStatusUI(record) {
+        var stateEl = document.getElementById('cookie-consent-state');
+        var idEl = document.getElementById('cookie-consent-id');
+        var dateEl = document.getElementById('cookie-consent-date');
+        if (!stateEl && !idEl && !dateEl) return;
+        var value = record ? record.v : null;
+        if (stateEl) stateEl.textContent = stateLabel(value);
+        if (idEl) idEl.textContent = (record && record.id) ? record.id : '—';
+        if (dateEl) dateEl.textContent = (record && record.t) ? formatConsentDate(record.t) : '—';
+    }
+
+    function setConsent(value) {
+        var record = {
+            v: value,
+            id: generateConsentId(),
+            t: new Date().toISOString()
+        };
+        var expires = new Date();
+        expires.setDate(expires.getDate() + CONSENT_DAYS);
+        document.cookie = CONSENT_COOKIE + '=' + encodeURIComponent(JSON.stringify(record))
+            + '; expires=' + expires.toUTCString()
+            + '; path=/; SameSite=Lax';
+        updateConsentStatusUI(record);
+    }
+
+    function purgeNonConsentCookies() {
+        var cookies = document.cookie ? document.cookie.split(';') : [];
+        var hostname = location.hostname;
+        var domains = ['', hostname];
+        if (hostname.indexOf('.') !== -1) {
+            domains.push('.' + hostname.replace(/^www\./, ''));
+            domains.push('.' + hostname);
+        }
+        var paths = ['/', location.pathname];
+
+        for (var i = 0; i < cookies.length; i++) {
+            var name = cookies[i].split('=')[0].trim();
+            if (!name || name === CONSENT_COOKIE) continue;
+
+            for (var d = 0; d < domains.length; d++) {
+                for (var p = 0; p < paths.length; p++) {
+                    var base = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=' + paths[p];
+                    if (domains[d]) {
+                        document.cookie = base + '; domain=' + domains[d];
+                    } else {
+                        document.cookie = base;
+                    }
+                }
+            }
+        }
+    }
+
+    function setThemeColor(color) {
+        if (!themeMeta) {
+            themeMeta = document.querySelector('meta[name="theme-color"]');
+            if (!themeMeta) {
+                themeMeta = document.createElement('meta');
+                themeMeta.setAttribute('name', 'theme-color');
+                document.head.appendChild(themeMeta);
+            }
+        }
+        themeMeta.setAttribute('content', color);
+    }
+
+    function clearThemeColor() {
+        if (!themeMeta) {
+            themeMeta = document.querySelector('meta[name="theme-color"]');
+        }
+        if (themeMeta && themeMeta.parentNode) {
+            themeMeta.parentNode.removeChild(themeMeta);
+        }
+        themeMeta = null;
+    }
+
+    function hideBanner() {
+        if (banner && banner.open) {
+            banner.close();
+        }
+        document.body.classList.remove('cookie-banner-open');
+        // Leave Safari chrome alone — do not force white via theme-color.
+        clearThemeColor();
+        if (lastFocus && typeof lastFocus.focus === 'function') {
+            lastFocus.focus();
+        }
+        lastFocus = null;
+    }
+
+    function showBanner() {
+        if (!banner) return;
+        lastFocus = document.activeElement;
+        if (typeof banner.showModal === 'function') {
+            banner.showModal();
+        } else {
+            banner.setAttribute('open', '');
+        }
+        document.body.classList.add('cookie-banner-open');
+        setThemeColor(THEME_OPEN);
+        banner.focus();
+    }
+
+    window.nottinfraOpenCookiePreferences = showBanner;
+
+    function allow() {
+        setConsent('all');
+        if (typeof window.nottinfraLoadAnalytics === 'function') {
+            window.nottinfraLoadAnalytics();
+        }
+        hideBanner();
+    }
+
+    function deny() {
+        purgeNonConsentCookies();
+        setConsent('essential');
+        hideBanner();
+    }
+
+    function bindAction(id, handler) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', function (e) {
+            e.preventDefault();
+            handler();
+        });
+    }
+
+    if (banner) {
+        banner.addEventListener('cancel', function (e) {
+            e.preventDefault();
+        });
+    }
+
+    bindAction('cookie-allow', allow);
+    bindAction('cookie-deny', deny);
+    bindAction('cookie-manage', showBanner);
+
+    updateConsentStatusUI(readConsentRecord());
+
+    if (!getConsentValue()) {
+        showBanner();
+    }
+})();
+</script>
+{{ end }}

@@ -1,0 +1,13 @@
+title = "boilerplate"
+
+[extend]
+useDefault = true
+
+# TUF targets-role key id / public key hex embedded in Config.ps1 — public trust
+# material, not credentials.
+[allowlist]
+description = "TUF public key material"
+regexes = [
+  '''4b7b9ec52e91431e7310abf27edf4d3b0abb39308801b038aad8dac35f0f8907''',
+  '''5fb64cdf03bbce4a54d27cf1981614075066732297f1539a5d39160f6de7dc13''',
+]

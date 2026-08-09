@@ -13,10 +13,12 @@ Service hosts live in [`settings.cfg`](../../settings.cfg) under `ENDPOINTS.<SER
 | `apply-alerts.ps1` | OpenSearch Dashboards + Grafana alert rules |
 | `apply-dashboards.ps1` | OpenSearch `{project}-logging` + `{project}-cmd` streams + dashboards |
 | `apply-db.ps1` | `assets/db.sql` (creates DB if missing) |
+| `apply-articles.ps1` | Seed `assets/articles/*.md` → `article` table (AI keywords via `AI_URL` / `API_KEY` / `MODEL_NAME` in `.env.shared`) |
 | `apply-env.ps1` | Push env files → Vault |
 | `apply-commit.ps1` | Commit + push to live/test remotes |
 | `apply-dns.ps1` | Apply `public.dns.*` A (+ per-site TXT) via Spaceship |
 | `apply-google-observability.ps1` | GA4 account/properties + Search Console DNS verify |
+| `apply-synth-monitoring.ps1` | Push HTTPS probe targets → `NottInfra/blackbox-targets` (`https/<project>.json`) |
 | `refresh-boilerplate.ps1` | Soft-pull boilerplate updates |
 
 Orchestrators construct `$Env` / `$Project` / `$Settings`, then `$Env.BindConfig($Settings, $Project)` so endpoint URLs are in process env. Libs keep using `$Env.Require('…_URL')`.

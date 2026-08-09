@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ .Description }}">
+    <meta name="keywords" content="{{ .Keywords }}">
+    <meta name="author" content="Timo Hoyland">
+    <meta name="robots" content="index, follow">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ .BaseURL }}/{{ .DetailPath }}/{{ .Slug }}">
+    <meta property="og:title" content="{{ .Title }} | Timo Hoyland">
+    <meta property="og:description" content="{{ .Description }}">
+    <meta property="og:locale" content="en_GB">
+    <meta property="og:site_name" content="Timo Hoyland">
+    <meta property="article:author" content="Timo Hoyland">
+    {{ if .Created }}<meta property="article:published_time" content="{{ .Created }}">{{ end }}
+    {{ if .Updated }}<meta property="article:modified_time" content="{{ .Updated }}">{{ end }}
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ .Title }} | Timo Hoyland">
+    <meta name="twitter:description" content="{{ .Description }}">
+
+    <title>{{ .Title }} | Timo Hoyland</title>
+    <link rel="canonical" href="{{ .BaseURL }}/{{ .DetailPath }}/{{ .Slug }}">
+    {{ template "layout_styles" . }}
+    {{ template "analytics" . }}
+</head>
+<body>
+    {{ template "header" . }}
+    <main role="main" id="main-content">
+        <article aria-labelledby="article-title" itemscope itemtype="https://schema.org/Article">
+            <hr aria-hidden="true">
+            <h2 id="article-title" itemprop="headline">{{ .Title }}</h2>
+
+            {{ if .Created }}<meta itemprop="datePublished" content="{{ .Created }}">{{ end }}
+            {{ if .Updated }}<meta itemprop="dateModified" content="{{ .Updated }}">{{ end }}
+
+            <div itemprop="articleBody">
+                {{ raw .Body }}
+            </div>
+            <p><a href="/" aria-label="Back to homepage">Back to home</a></p>
+        </article>
+    </main>
+    {{ template "footer" . }}
+    {{ if eq .DetailPath "article" }}
+    <script>
+    (function () {
+        var slug = {{ .Slug }};
+        if (!slug) return;
+        var url = "/views/" + encodeURIComponent(slug);
+        try {
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(url);
+                return;
+            }
+        } catch (e) {}
+        try {
+            fetch(url, { method: "POST", keepalive: true, credentials: "same-origin" });
+        } catch (e) {}
+    })();
+    </script>
+    {{ end }}
+</body>
+</html>

@@ -1,0 +1,325 @@
+---
+# Timo-Hoyland — personal site (EXTERNAL ingress / Caddy).
+# Image: ghcr.io/1imo/timo-hoyland:latest (CI → GHCR; pin digest later).
+#
+# Secrets: Vault Agent Injector (no kubectl Vault token).
+#   KV path: secret/data/live-Timo-Hoyland  (from ./cmd/apply-env.ps1, NETWORK=cluster)
+#   Rendered to: /vault/secrets/app  (dotenv; Go LoadDotEnv)
+#
+# Prerequisites:
+#   kubectl apply -f src/vault/service.yml && kubectl apply -f src/vault-agent/service.yml
+#   ./cmd/apply-env.ps1   # ENV=live, NETWORK=cluster → secret/live-Timo-Hoyland
+#   ./cmd/apply-db.ps1
+#   ./cmd/apply-articles.ps1
+#
+# One-time Vault k8s auth role (vault CLI, already logged in as admin):
+#   vault policy write timo-hoyland - <<'EOF'
+#   path "secret/data/live-Timo-Hoyland" {
+#     capabilities = ["read"]
+#   }
+#   path "secret/metadata/live-Timo-Hoyland" {
+#     capabilities = ["read"]
+#   }
+#   EOF
+#   vault write auth/kubernetes/role/timo-hoyland \
+#     bound_service_account_names=timo-hoyland \
+#     bound_service_account_namespaces=timo-hoyland \
+#     policies=timo-hoyland \
+#     ttl=1h
+#
+# GHCR pull secret (private package) — once per cluster/ns:
+#   kubectl -n timo-hoyland create secret docker-registry ghcr-pull \
+#     --docker-server=ghcr.io \
+#     --docker-username=1imo \
+#     --docker-password="$(gh auth token)" \
+#     --docker-email=noreply@nottinfra.co.uk
+#
+# Apply:
+#   kubectl apply -f manifests/service.yml
+#   kubectl -n timo-hoyland rollout status deploy/timo-hoyland
+#
+# Domains: project.cfg public.domains → Caddy EXTERNAL + DNS.
+# Runtime: HTTP :8080, Postgres articles, Redis broadcast-svc queue (PROJECT=Timo-Hoyland), OpenAI egress.
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    postgres-client: allowed
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+  name: timo-hoyland
+---
+apiVersion: v1
+automountServiceAccountToken: true
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: timo-hoyland
+  name: timo-hoyland
+  namespace: timo-hoyland
+imagePullSecrets:
+- name: ghcr-pull
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: timo-hoyland
+  name: timo-hoyland
+  namespace: timo-hoyland
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: http
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: timo-hoyland
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: timo-hoyland
+  name: timo-hoyland
+  namespace: timo-hoyland
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/name: timo-hoyland
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-inject-status: update
+        vault.hashicorp.com/agent-inject-vault-addr: https://vault.vault.svc.cluster.local:8200
+        vault.hashicorp.com/tls-secret: vault-ca
+        vault.hashicorp.com/ca-cert: /vault/tls/ca.crt
+        vault.hashicorp.com/role: timo-hoyland
+        vault.hashicorp.com/agent-inject-secret-app: secret/data/live-Timo-Hoyland
+        vault.hashicorp.com/agent-inject-file-app: app
+        vault.hashicorp.com/agent-inject-template-app: |
+          {{- with secret "secret/data/live-Timo-Hoyland" -}}
+          {{- range $k, $v := .Data.data -}}
+          {{ $k }}={{ $v | toJSON }}
+          {{ end -}}
+          {{- end -}}
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/name: timo-hoyland
+    spec:
+      serviceAccountName: timo-hoyland
+      containers:
+      - name: timo-hoyland
+        image: ghcr.io/1imo/timo-hoyland:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ENV
+          value: live
+        - name: NETWORK
+          value: cluster
+        # Must match project.cfg → project (broadcast-svc queue / presence).
+        - name: PROJECT
+          value: Timo-Hoyland
+        - name: PROJECT_ROOT
+          value: /app
+        - name: PORT
+          value: "8080"
+        - name: ASSETS_DIR
+          value: /app/assets
+        - name: VAULT_AGENT_ENV_FILE
+          value: /vault/secrets/app
+        readinessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: "500m"
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: timo-hoyland
+  name: timo-hoyland
+  namespace: timo-hoyland
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/name: timo-hoyland
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - ports:
+    - port: 8080
+      protocol: TCP
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: vault
+    ports:
+    - port: 8200
+      protocol: TCP
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: postgres
+    ports:
+    - port: 5432
+      protocol: TCP
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: redis
+    ports:
+    - port: 6379
+      protocol: TCP
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: 4318
+      protocol: TCP
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - port: 443
+      protocol: TCP
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: timo-hoyland
+  name: timo-hoyland-egress
+  namespace: timo-hoyland
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/name: timo-hoyland
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        app.kubernetes.io/name: vault
+        k8s:io.kubernetes.pod.namespace: vault
+    toPorts:
+    - ports:
+      - port: "8200"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        app.kubernetes.io/name: postgres
+        k8s:io.kubernetes.pod.namespace: postgres
+    toPorts:
+    - ports:
+      - port: "5432"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        app.kubernetes.io/name: redis
+        k8s:io.kubernetes.pod.namespace: redis
+    toPorts:
+    - ports:
+      - port: "6379"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: monitoring
+    toPorts:
+    - ports:
+      - port: "4318"
+        protocol: TCP
+  - toEntities:
+    - world
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        k8s:k8s-app: kube-dns
+        k8s:io.kubernetes.pod.namespace: kube-system
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      - port: "53"
+        protocol: TCP
+---
+# CA trust for Vault Agent Injector (Internal CA).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-ca
+  namespace: timo-hoyland
+  labels:
+    app.kubernetes.io/name: timo-hoyland
+spec:
+  secretName: vault-ca
+  commonName: vault-ca-for-agents
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth

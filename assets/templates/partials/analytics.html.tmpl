@@ -1,0 +1,133 @@
+{{ define "analytics" }}
+<script>
+(function () {
+    var MATOMO_URL = {{ .MatomoURL }};
+    var MATOMO_SITE_ID = {{ .MatomoSiteID }};
+    var GA4_MEASUREMENT_ID = {{ .GA4MeasurementID }};
+
+    var OPENREPLAY_PROJECT_KEY = {{ .OpenReplayProjectKey }};
+    var OPENREPLAY_INGEST = {{ .OpenReplayIngestURL }};
+    var OPENREPLAY_SCRIPT = {{ .OpenReplayScriptURL }};
+
+    function getConsent() {
+        var match = document.cookie.match(/(?:^|; )cookie_consent=([^;]*)/);
+        if (!match) return null;
+        var raw = decodeURIComponent(match[1]);
+        try {
+            var data = JSON.parse(raw);
+            return data && data.v && data.id && data.t ? data.v : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function loadMatomo() {
+        if (!MATOMO_URL || !MATOMO_SITE_ID) return;
+        var u = String(MATOMO_URL).replace(/\/?$/, '/');
+        var _paq = window._paq = window._paq || [];
+        _paq.push(['trackPageView']);
+        _paq.push(['enableLinkTracking']);
+        (function () {
+            _paq.push(['setTrackerUrl', u + 'matomo.php']);
+            _paq.push(['setSiteId', String(MATOMO_SITE_ID)]);
+            var g = document.createElement('script');
+            var s = document.getElementsByTagName('script')[0];
+            g.async = true;
+            g.src = u + 'matomo.js';
+            s.parentNode.insertBefore(g, s);
+        })();
+    }
+
+    function loadGA4() {
+        if (!GA4_MEASUREMENT_ID) return;
+        var id = String(GA4_MEASUREMENT_ID);
+        var g = document.createElement('script');
+        g.async = true;
+        g.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(id);
+        document.head.appendChild(g);
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { window.dataLayer.push(arguments); }
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', id);
+    }
+
+    function flushOpenReplay() {
+        try {
+            var or = window.OpenReplay;
+            // Only the real Tracker instance (post-script-load), not the snippet queue array.
+            if (!or || typeof or.forceFlushBatch !== "function" || Array.isArray(or)) return;
+            // Mouse/scroll live in the "player" channel and only flush every few seconds.
+            // Full page navigations (this site is MPA) often leave before that — flush early.
+            or.forceFlushBatch();
+        } catch (e) {}
+    }
+
+    function bindOpenReplayFlush() {
+        if (window._nottinfraORFlushBound) return;
+        window._nottinfraORFlushBound = true;
+        document.addEventListener("click", function (e) {
+            var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+            if (!a) return;
+            var href = a.getAttribute("href") || "";
+            if (!href || href.charAt(0) === "#" || href.indexOf("javascript:") === 0) return;
+            flushOpenReplay();
+        }, true);
+        window.addEventListener("pagehide", flushOpenReplay);
+        document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "hidden") flushOpenReplay();
+        });
+    }
+
+    function loadOpenReplay() {
+        if (!OPENREPLAY_PROJECT_KEY || !OPENREPLAY_INGEST) return;
+        /* OpenReplay Tracking Code */
+        var initOpts = {
+            projectKey: OPENREPLAY_PROJECT_KEY,
+            ingestPoint: OPENREPLAY_INGEST,
+            defaultInputMode: 2,
+            obscureTextNumbers: false,
+            obscureTextEmails: true
+        };
+        {{ if .OpenReplayDisableSecureMode }}
+        initOpts.__DISABLE_SECURE_MODE = true;
+        {{ end }}
+        var startOpts = { userID: "" };
+        // Always https — protocol-relative // breaks on http://localhost (script loads as http, often blocked).
+        var scriptURL = OPENREPLAY_SCRIPT || "https://static.openreplay.com/18.0.17/openreplay.js";
+        if (scriptURL.indexOf("//") === 0) {
+            scriptURL = "https:" + scriptURL;
+        }
+        (function (A, s, a, y, e, r) {
+            r = window.OpenReplay = [e, r, y, [s - 1, e]];
+            s = document.createElement("script");
+            s.src = A;
+            s.async = !a;
+            document.getElementsByTagName("head")[0].appendChild(s);
+            r.start = function () { r.push([0]); };
+            r.stop = function () { r.push([1]); };
+            r.setUserID = function (id) { r.push([2, id]); };
+            r.setUserAnonymousID = function (id) { r.push([3, id]); };
+            r.setMetadata = function (k, v) { r.push([4, k, v]); };
+            r.event = function (k, p, i) { r.push([5, k, p, i]); };
+            r.issue = function (k, p) { r.push([6, k, p]); };
+            r.isActive = function () { return false; };
+            r.getSessionToken = function () {};
+        })(scriptURL, 1, 0, initOpts, startOpts);
+        bindOpenReplayFlush();
+    }
+
+    window.nottinfraLoadAnalytics = function () {
+        if (window._nottinfraAnalyticsLoaded) return;
+        window._nottinfraAnalyticsLoaded = true;
+        loadMatomo();
+        loadGA4();
+        loadOpenReplay();
+    };
+
+    if (getConsent() === "all") {
+        window.nottinfraLoadAnalytics();
+    }
+})();
+</script>
+{{ end }}
