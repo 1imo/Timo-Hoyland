@@ -2,11 +2,16 @@ package bgservices
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	ingest "timohoyland.co.uk/use-cases/broadcast-svc-ingest"
 	"timohoyland.co.uk/utils"
+	"timohoyland.co.uk/utils/telemetry"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // BroadcastListener drains the broadcast-svc Redis queue and refreshes presence.
@@ -32,6 +37,10 @@ func (l *BroadcastListener) Run(ctx context.Context) error {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
+	tracer := telemetry.Tracer("timohoyland.co.uk/broadcast")
+	meter := telemetry.Meter("timohoyland.co.uk/broadcast")
+	ingested, _ := meter.Int64Counter("broadcast.articles_ingested")
+
 	errCh := make(chan error, 1)
 	go func() {
 		for {
@@ -40,11 +49,20 @@ func (l *BroadcastListener) Run(ctx context.Context) error {
 				errCh <- err
 				return
 			}
-			if err := l.Ingest.HandlePayload(ctx, payload); err != nil {
-				log.Printf("broadcast job: %v", err)
+			jobCtx, span := tracer.Start(ctx, "broadcast.ingest")
+			span.SetAttributes(attribute.String("project", l.Project))
+			if err := l.Ingest.HandlePayload(jobCtx, payload); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				span.End()
+				slog.Error("broadcast job", "project", l.Project, "err", err)
 				continue
 			}
-			log.Printf("ingested article from broadcast queue project=%s", l.Project)
+			if ingested != nil {
+				ingested.Add(jobCtx, 1, metric.WithAttributes(attribute.String("project", l.Project)))
+			}
+			span.End()
+			slog.Info("ingested article from broadcast queue", "project", l.Project)
 		}
 	}()
 
@@ -54,7 +72,7 @@ func (l *BroadcastListener) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if err := l.TouchPresence(ctx); err != nil {
-				log.Printf("presence refresh: %v", err)
+				slog.Error("presence refresh", "err", err)
 			}
 		case err := <-errCh:
 			return err

@@ -28,6 +28,8 @@ type Config struct {
 	AIURL                   string
 	APIKey                  string
 	ModelName               string
+	OTELURL                 string
+	OTELHeaders             string
 	AssetsDir               string
 	RateLimitRPM            int
 	ProjectRoot             string
@@ -44,6 +46,9 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	if err := resolveEndpointEnv(root, "OPENREPLAY"); err != nil {
+		return nil, err
+	}
+	if err := resolveEndpointEnv(root, "OTEL"); err != nil {
 		return nil, err
 	}
 
@@ -74,9 +79,14 @@ func LoadConfig() (*Config, error) {
 			Env("OPENREPLAY_SCRIPT_URL"),
 			"https://static.openreplay.com/18.0.17/openreplay.js",
 		),
-		AIURL:                   strings.TrimRight(Env("AI_URL"), "/"),
-		APIKey:                  Env("API_KEY"),
-		ModelName:               firstNonEmpty(Env("MODEL_NAME"), "gpt-4.1-mini"),
+		AIURL:     strings.TrimRight(Env("AI_URL"), "/"),
+		APIKey:    Env("API_KEY"),
+		ModelName: firstNonEmpty(Env("MODEL_NAME"), "gpt-4.1-mini"),
+		OTELURL: firstNonEmpty(
+			Env("OTEL_URL"),
+			Env("OTEL_URL_PUBLIC"),
+		),
+		OTELHeaders:             Env("OTEL_HEADERS"),
 		AssetsDir:               AssetsDir(),
 		RateLimitRPM:            parseIntDefault(Env("RATE_LIMIT_RPM"), 120),
 		ProjectRoot:             root,

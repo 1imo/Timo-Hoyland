@@ -9,6 +9,10 @@ import (
 
 	"timohoyland.co.uk/use-cases/view"
 	"timohoyland.co.uk/utils"
+	"timohoyland.co.uk/utils/telemetry"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // Job is the payload from broadcast-svc.
@@ -36,25 +40,50 @@ func New(articles *view.Articles, keywords *Keywords, html *HTMLRenderer) *UseCa
 
 // HandlePayload parses job JSON, enriches with AI, and upserts the article.
 func (u *UseCase) HandlePayload(ctx context.Context, payload string) error {
+	ctx, span := telemetry.Tracer("timohoyland.co.uk/ingest").Start(ctx, "ingest.handle_payload")
+	defer span.End()
+
 	var job Job
 	if err := json.Unmarshal([]byte(payload), &job); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("decode job: %w", err)
 	}
+	span.SetAttributes(attribute.String("job.id", job.ID), attribute.String("job.source", job.Source))
 	title, body := splitTitleBody(job)
 	if title == "" {
-		return fmt.Errorf("job %s: empty title (first line required)", job.ID)
+		err := fmt.Errorf("job %s: empty title (first line required)", job.ID)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	return u.ingest(ctx, title, body, nil)
+	if err := u.ingest(ctx, title, body, nil); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func (u *UseCase) ingest(ctx context.Context, title, content string, seedKeywords []string) error {
+	ctx, span := telemetry.Tracer("timohoyland.co.uk/ingest").Start(ctx, "ingest.article")
+	defer span.End()
+
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return fmt.Errorf("title required")
+		err := fmt.Errorf("title required")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	if view.Slugify(title) == "" {
-		return fmt.Errorf("invalid title for slug")
+	slug := view.Slugify(title)
+	if slug == "" {
+		err := fmt.Errorf("invalid title for slug")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
+	span.SetAttributes(attribute.String("article.title", title), attribute.String("article.slug", slug))
 	content = strings.TrimSpace(content)
 
 	kw, err := u.Keywords.Build(ctx, title, content, seedKeywords)
@@ -63,17 +92,24 @@ func (u *UseCase) ingest(ctx context.Context, title, content string, seedKeyword
 	}
 	html, err := u.HTML.Render(ctx, title, content)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	now := time.Now().UTC()
-	return u.Articles.Upsert(ctx, utils.ArticleRow{
+	if err := u.Articles.Upsert(ctx, utils.ArticleRow{
 		Title:     title,
 		Keywords:  kw,
 		Content:   content,
 		HTML:      html,
 		CreatedAt: now,
 		UpdatedAt: now,
-	})
+	}); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func splitTitleBody(job Job) (title, plain string) {

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +17,7 @@ import (
 	ingest "timohoyland.co.uk/use-cases/broadcast-svc-ingest"
 	"timohoyland.co.uk/use-cases/view"
 	"timohoyland.co.uk/utils"
+	"timohoyland.co.uk/utils/telemetry"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -24,15 +25,28 @@ import (
 func main() {
 	cfg, err := utils.LoadConfig()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config", "err", err)
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	tel, err := telemetry.Setup(ctx, "timo-hoyland")
+	if err != nil {
+		slog.Error("telemetry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tel.Shutdown(shutdownCtx)
+	}()
+
 	db, err := utils.OpenPostgres(ctx, cfg.DBURL)
 	if err != nil {
-		log.Fatalf("postgres: %v", err)
+		slog.Error("postgres", "err", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -41,7 +55,8 @@ func main() {
 	if cfg.RedisURL != "" {
 		rdb, err = utils.OpenRedis(ctx, cfg.RedisURL)
 		if err != nil {
-			log.Fatalf("redis: %v", err)
+			slog.Error("redis", "err", err)
+			os.Exit(1)
 		}
 		defer func() { _ = rdb.Close() }()
 		rateClient = rdb.Client
@@ -49,18 +64,21 @@ func main() {
 
 	articles := view.NewArticles(db)
 	if err := articles.Reload(ctx); err != nil {
-		log.Fatalf("load articles: %v", err)
+		slog.Error("load articles", "err", err)
+		os.Exit(1)
 	}
 
 	if rdb != nil {
 		ai := utils.NewAIClient(cfg.AIURL, cfg.APIKey, cfg.ModelName)
 		keywords, err := ingest.NewKeywords(ai, cfg.AssetsDir)
 		if err != nil {
-			log.Fatalf("keywords: %v", err)
+			slog.Error("keywords", "err", err)
+			os.Exit(1)
 		}
 		htmlRenderer, err := ingest.NewHTMLRenderer(ai, cfg.AssetsDir)
 		if err != nil {
-			log.Fatalf("html renderer: %v", err)
+			slog.Error("html renderer", "err", err)
+			os.Exit(1)
 		}
 		listener := bgservices.NewBroadcastListener(
 			rdb,
@@ -69,30 +87,32 @@ func main() {
 		)
 		go func() {
 			if err := listener.Run(ctx); err != nil && ctx.Err() == nil {
-				log.Printf("broadcast listener stopped: %v", err)
+				slog.Error("broadcast listener stopped", "err", err)
 			}
 		}()
 	}
 
 	legals, err := view.LoadLegals(filepath.Join(cfg.AssetsDir, "legals"))
 	if err != nil {
-		log.Fatalf("legals: %v", err)
+		slog.Error("legals", "err", err)
+		os.Exit(1)
 	}
 
 	tmpl, textTmpl, err := routes.NewTemplates(cfg.AssetsDir)
 	if err != nil {
-		log.Fatalf("templates: %v", err)
+		slog.Error("templates", "err", err)
+		os.Exit(1)
 	}
 
 	site := controllers.NewSiteController(articles, legals, "timohoyland.co.uk")
 	views := controllers.NewViewsController(view.NewViews(db, articles))
-	handler := middlewares.RateLimit(rateClient, routes.Handler(routes.Deps{
+	handler := middlewares.Tracing(middlewares.RateLimit(rateClient, routes.Handler(routes.Deps{
 		Site:          site,
 		Views:         views,
 		Templates:     tmpl,
 		TextTemplates: textTmpl,
 		BaseURL:       cfg.BaseURL,
-	}))
+	})))
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -107,9 +127,14 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("serving env=%s network=%s port=%s articles=%d",
-		cfg.Env, utils.Env("NETWORK"), cfg.Port, len(articles.List()))
+	slog.Info("serving",
+		"env", cfg.Env,
+		"network", utils.Env("NETWORK"),
+		"port", cfg.Port,
+		"articles", len(articles.List()),
+	)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("listen: %v", err)
+		slog.Error("listen", "err", err)
+		os.Exit(1)
 	}
 }
